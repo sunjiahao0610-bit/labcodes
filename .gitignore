@@ -1,0 +1,22 @@
+# 编译产物
+obj/
+bin/
+
+# 调试和评分临时文件
+.gdb.in
+.qemu.out
+*.tar.gz
+
+# cscope/ctags 生成的文件
+cscope*
+tags
+
+# 编辑器/IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db

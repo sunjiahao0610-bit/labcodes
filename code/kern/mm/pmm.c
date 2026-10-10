@@ -87,6 +87,8 @@ static void page_init(void) {
     //kernel在end[]结束, pages是剩下的页的开始
     pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
 
+    // 先将所有页都设置为 Reserved
+    // 之后计算出真正空闲的内存范围后，再把那一部分标记为空闲，交给分配器管理
     for (size_t i = 0; i < npage - nbase; i++) {
         SetPageReserved(pages + i);
     }
@@ -98,6 +100,19 @@ static void page_init(void) {
     if (freemem < mem_end) {
         init_memmap(pa2page(mem_begin), (mem_end - mem_begin) / PGSIZE);
     }
+    // DRAM 示意图
+    // 低物理地址
+    //       0x80000000    +----------------------+
+    //                     | OpenSBI              |
+    //       0x80200000    +----------------------+
+    //                     | ucore 内核           |
+    //                     | (.text/.rodata/.data/.bss) |
+    //        end/pages    +----------------------+  ← 内核结束
+    //                     | struct Page 数组     |  ← 内存管理元数据
+    // freemem/mem_begin   +----------------------+  ← 元数据结束，空闲内存开始
+    //                     | 空闲物理页           |
+    //           mem_end   +----------------------+
+    // 高物理地址
 }
 
 /* pmm_init - initialize the physical memory management */

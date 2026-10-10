@@ -69,17 +69,22 @@ static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
+    // 遍历每个页，重置状态
     for (; p != base + n; p ++) {
         assert(PageReserved(p));
         p->flags = p->property = 0;
         set_page_ref(p, 0);
     }
+    // 将欲加入的页集合的第一页(base)的 property 设置为 0
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
+    // 如果空闲链表为空，直接把 base 的 page_link 加入链表
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
     } else {
+        // 否则，遍历链表，找到第一个物理地址比 base 大的页，把 base 插到它前面
+        // 如果遍历到链表末尾都没找到，说明 base 的地址最大，就插到链表尾部
         list_entry_t* le = &free_list;
         while ((le = list_next(le)) != &free_list) {
             struct Page* page = le2page(le, page_link);

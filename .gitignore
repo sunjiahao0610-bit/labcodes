@@ -5,6 +5,8 @@ bin/
 # 调试和评分临时文件
 .gdb.in
 .qemu.out
+.projectile
+.score
 *.tar.gz
 
 # cscope/ctags 生成的文件

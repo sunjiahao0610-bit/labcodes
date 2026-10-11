@@ -167,6 +167,8 @@ int another_function(int arg);
 
 **负责人：** 乐嘉文
 
+见 [buddy_system设计文档](./buddy_system设计文档.md)
+
 ---
 
 ## 五、测试与验证
@@ -175,6 +177,9 @@ int another_function(int arg);
 - 编译及运行成功的输出（make qemu），可能有多个
 - 测试通过的结果（make grade），只有一个
 -->
+buddy system 分配算法测试:
+
+![buddy_system](./images/buddy_system测试.png)
 
 ## 六、实验总结与收获
 

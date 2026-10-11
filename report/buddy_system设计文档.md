@@ -540,15 +540,6 @@ satp virtual address: 0xffffffffc0205000
 satp physical address: 0x0000000080205000
 ```
 
-对照 `code/.score`（`make grade` 的记录）：
-
-```text
-Check PMM:               (2.3s)
-  -check pmm:                                OK
-  -check page table:                         OK
-  -check ticks:                              OK
-Total Score: 50/50
-```
 
 ### 6.3 结果解读
 

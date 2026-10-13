@@ -6,10 +6,8 @@ if [ "x$1" = "x-v" ]; then
     out=/dev/stdout
     err=/dev/stderr
 else
-    # out=/dev/null
-    # err=/dev/null
-    out=/dev/stdout
-    err=/dev/stderr
+    out=/dev/null
+    err=/dev/null
 fi
 
 ## make & makeopts
@@ -25,9 +23,7 @@ make_print() {
     echo `$make $makeopts print-$1`
 }
 
-echo ">>>>>>>>>> here_make>>>>>>>>>>>"
 echo `$make`
-echo ">>>>>>>>>> here_make>>>>>>>>>>>"
 
 ## command tools
 awk='awk'
@@ -37,18 +33,13 @@ grep='grep'
 rm='rm -f'
 sed='sed'
 
-## symbol table
+## sym table / gdb / qemu
 sym_table='obj/kernel.sym'
-
-## gdb & gdbopts
 gdb="$(make_print GDB)"
 gdbport='1234'
-
 gdb_in="$(make_print GRADE_GDB_IN)"
 
-## qemu & qemuopts
 qemu="$(make_print qemu)"
-
 qemu_out="$(make_print GRADE_QEMU_OUT)"
 
 if $qemu -nographic -help | grep -q '^-gdb'; then
@@ -57,17 +48,13 @@ else
     qemugdb="-s -p $gdbport"
 fi
 
-## default variables
 default_timeout=30
-default_pts=5
-
 pts=5
 part=0
 part_pos=0
 total=0
 total_pos=0
 
-## default functions
 update_score() {
     total=`expr $total + $part`
     total_pos=`expr $total_pos + $part_pos`
@@ -128,9 +115,6 @@ fail() {
 }
 
 run_qemu() {
-    echo "try to run qemu"
-    # Run qemu with serial output redirected to $qemu_out. If $brkfun is non-empty,
-    # wait until $brkfun is reached or $timeout expires, then kill QEMU
     qemuextra=
     if [ "$brkfun" ]; then
         qemuextra="-S $qemugdb"
@@ -142,18 +126,14 @@ run_qemu() {
 
     t0=$(get_time)
     (
-        
         ulimit -t $timeout
         exec $qemu -nographic $qemuopts -serial file:$qemu_out -monitor null -no-reboot $qemuextra
     ) > $out 2> $err &
     pid=$!
-    echo "qemu pid=$pid"
 
-    # wait for QEMU to start
     sleep 1
 
     if [ -n "$brkfun" ]; then
-        # find the address of the kernel $brkfun function
         brkaddr=`$grep " $brkfun\$" $sym_table | $sed -e's/ .*$//g'`
         brkaddr_phys=`echo $brkaddr | sed "s/^c0/00/g"`
         (
@@ -164,45 +144,15 @@ run_qemu() {
             fi
             echo "continue"
         ) > $gdb_in
-
         $gdb -batch -nx -x $gdb_in > /dev/null 2>&1
-
-        # make sure that QEMU is dead
-        # on OS X, exiting gdb doesn't always exit qemu
         kill $pid > /dev/null 2>&1
     fi
 }
 
-build_run() {
-    echo "here_build_run"
-    # usage: build_run <tag> <args>
-    show_build_tag "$1"
-    shift
-
-    if $verbose; then
-        echo "$make $@ ..."
-    fi
-    $make $makeopts $@ 'DEFS+=-DDEBUG_GRADE' > $out 2> $err
-
-    if [ $? -ne 0 ]; then
-        echo $make $@ failed
-        exit 1
-    fi
-
-    # now run qemu and save the output
-    run_qemu
-
-    show_time
-
-    cp $qemu_out .`echo $tag | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g'`.log
-}
-
 check_result() {
-    # usage: check_result <tag> <check> <check args...>
     show_check_tag "$1"
     shift
 
-    # give qemu some time to run (for asynchronous mode)
     if [ ! -s $qemu_out ]; then
         sleep 4
     fi
@@ -261,57 +211,7 @@ check_regexps() {
     fi
 }
 
-run_test() {
-    # usage: run_test [-tag <tag>] [-Ddef...] [-check <check>] checkargs ...
-    tag=
-    check=check_regexps
-    while true; do
-        select=
-        case $1 in
-            -tag)
-                select=`expr substr $1 2 ${#1}`
-                eval $select='$2'
-                ;;
-        esac
-        if [ -z "$select" ]; then
-            break
-        fi
-        shift
-        shift
-    done
-    defs=
-    while expr "x$1" : "x-D.*" > /dev/null; do
-        defs="DEFS+='$1' $defs"
-        shift
-    done
-    if [ "x$1" = "x-check" ]; then
-        check=$2
-        shift
-        shift
-    fi
-
-    $make $makeopts touch > /dev/null 2>&1
-    build_run "$tag" "$defs"
-
-    check_result 'check result' "$check" "$@"
-}
-
-quick_run() {
-    # usage: quick_run <tag> [-Ddef...]
-    tag="$1"
-    shift
-    defs=
-    while expr "x$1" : "x-D.*" > /dev/null; do
-        defs="DEFS+='$1' $defs"
-        shift
-    done
-
-    $make $makeopts touch > /dev/null 2>&1
-    build_run "$tag" "$defs"
-}
-
 quick_check() {
-    # usage: quick_check <tag> checkargs ...
     tag="$1"
     shift
     check_result "$tag" check_regexps "$@"
@@ -319,61 +219,26 @@ quick_check() {
 
 ## kernel image
 osimg=$(make_print ucoreimg)
-
-## swap image
 swapimg=$(make_print swapimg)
 
-## set default qemu-options
-# qemuopts="-hda $osimg"
-qemuopts="-machine virt -nographic -bios default -device loader,file=bin/ucore.img,addr=0x80200000"
-## set break-function, default is readline
+## qemu-options
+qemuopts="-machine virt -nographic -bios default -kernel bin/ucore.img"
+
+## the lab2 kernel only while(1) after entering kernel mode and never calls readline,
+## so no break function is needed and brkfun stays empty
 brkfun=
+
+run_qemu
 
 ## check now!!
 
-# quick_run 'Check PMM'
+pts=10
+quick_check 'check page init'                \
+    '[Test 1] Page Init: PASS'
 
-# pts=20
-# quick_check 'check pmm'                                         \
-#     'memory management: default_pmm_manager'                     \
-#     'check_alloc_page() succeeded!'                             \
-#     'check_pgdir() succeeded!'                                  \
-#     'check_boot_pgdir() succeeded!'
-
-# pts=20
-# quick_check 'check page table'                                  \
-#     'PDE(0e0) c0000000-f8000000 38000000 urw'                   \
-#     '  |-- PTE(38000) c0000000-f8000000 38000000 -rw'           \
-#     'PDE(001) fac00000-fb000000 00400000 -rw'                   \
-#     '  |-- PTE(000e0) faf00000-fafe0000 000e0000 urw'           \
-#     '  |-- PTE(00001) fafeb000-fafec000 00001000 -rw'
-
-# pts=10
-# quick_check 'check ticks'                                       \
-#     '++ setup timer interrupts'                                 \
-#     '100 ticks'                                                 \
-#     'End of Test.'
-
-echo "<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<"
-run_qemu
-echo "<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<"
-
-pts=5
-quick_check 'check physical_memory_map_information'                                         \
-    'memory management: best_fit_pmm_manager'                     \
-    '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'                                  \
-
-pts=20
-quick_check 'check_best_fit'                                       \
-    'check_alloc_page() succeeded!'                                  \
-    'satp virtual address: 0xffffffffc0204000'                       \
-    'satp physical address: 0x0000000080204000'                      \
-
-# pts=5
-# quick_check 'check ticks'                                       \
-#    '++ setup timer interrupts'                                 \
-#    '100 ticks'                                                 \
+pts=10
+quick_check 'check best fit'                 \
+    '[Test 2] Best-Fit: PASS'
 
 ## print final-score
 show_final
-

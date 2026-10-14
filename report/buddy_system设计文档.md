@@ -1,19 +1,22 @@
 # Buddy System（伙伴系统）物理内存分配算法设计文档
 
-> Lab 2 扩展练习 Challenge · 设计文档
+> Lab 2 Buddy System · 设计文档
 > 实现文件：`code/kern/mm/buddy_pmm.c`、`code/kern/mm/buddy_pmm.h`
 > 集成位置：`code/kern/mm/pmm.c` 的 `init_pmm_manager()`
 > 代码基线：commit `e4db532`
 >
-> 说明：本文档中的代码行号、结构体大小、初始化拆分结果（§4.2）与运行输出（§6.2）均来自本实现与一次实际构建运行；如改动代码后数值有变，请以重新运行结果为准。
+> 说明：本文档中的代码行号、结构体大小、初始化拆分结果（§4.2）与运行输出（§6.2）均来自本实现与一次实际构建运行；如改动代码后数值有变，**请以重新运行结果为准**，~~大概率不一样，仅作为参考~~。
 
 ---
 
 ## 1. 概述
 
+### 1.0 两个prompt
+1. 请根据 `default_pmm.c / dafault_pmm.h` 实现相应的四个主要函数函数以及相关的辅助函数。
+2. 生成相关测试
 ### 1.1 需求
 
-ucore 的物理内存管理采用**策略与机制分离**的设计：`pmm.c` 只负责“机制”（从设备树探测物理内存布局、建立 `struct Page` 数组、对外提供 `alloc_pages/free_pages/nr_free_pages`），具体分配算法由 `struct pmm_manager` 定义的一组函数指针决定。因此本 Challenge 的目标是：
+ucore 的物理内存管理采用**策略与机制分离**的设计：`pmm.c` 只负责“机制”（从设备树探测物理内存布局、建立 `struct Page` 数组、对外提供 `alloc_pages/free_pages/nr_free_pages`），具体分配算法由 `struct pmm_manager` 定义的一组函数指针决定。因此本任务的目标是：
 
 > 新增一个 `buddy_pmm_manager` 实例，实现 `init / init_memmap / alloc_pages / free_pages / nr_free_pages / check` 六个接口，并保证在 **O(1)～O(MAX_ORDER)** 时间内完成分配、释放与伙伴合并。
 
@@ -55,8 +58,6 @@ const struct pmm_manager buddy_pmm_manager = {
 
 ### 1.4 设计目标
 
-1. **正确性**：任意分配/释放序列结束后，空闲块集合恰好覆盖全部空闲页，无重叠、无丢失。
-2. **合并（coalescing）**：释放时自动与伙伴合并，抑制外部碎片。
 3. **低开销**：不引入任何辅助数组/位图，元数据全部寄存在 `struct Page` 中。
 4. **可验证**：提供不变量自检 `buddy_check_consistency()`，可在任意时刻验证内部一致性。
 
@@ -110,7 +111,7 @@ const struct pmm_manager buddy_pmm_manager = {
 
 ```c
 pmm_manager = &default_pmm_manager;   // 默认
-pmm_manager = &buddy_pmm_manager;     // 本 Challenge
+pmm_manager = &buddy_pmm_manager;     // 本任务
 ```
 
 `pmm_init()` 随后按固定顺序调用 `init → page_init() → init_memmap() → check()`，因此 `buddy_pmm_manager` 会被完整地走一遍生命周期。
@@ -404,6 +405,14 @@ static size_t buddy_nr_free_pages(void) { return total_free; }
 ---
 
 ## 5. 测试设计
+测试主要覆盖的行为：
+1. 初始状态/终态检查
+2. 基本的分配和释放功能
+3. 合并、分裂功能
+4. 非 2 的幂次的请求
+5. 请求过大的块直接失败（也是边界情况）
+
+有效性：测试检验了该实现能够完成分配器的基本功能，同时具有 buddy system 算法的合并、分裂的特点。
 
 测试代码内联在 `buddy_pmm.c` 中，由 `pmm_manager->check()` 在 `pmm_init()` 末尾自动触发。测试设计遵循三条原则：**① 先建立不变量基线，② 用“破坏性”操作逼近边界，③ 操作后恢复现场以免污染后续测试**。
 
@@ -416,9 +425,9 @@ buddy_check()
 ├── 2. buddy_basic_check()             // 分配 / 释放 / 计数 / 空池失败 / 现场保存恢复
 ├── 3. 多阶分配 alloc_pages(1/2/4/8)   // 各阶块头 PageProperty 必须为 0
 ├── 4. 对应释放 free_pages(1/2/4/8)    // 计数恢复
-├── 5. 伙伴合并验证                     // 两个 1 页块 → 释放 → 能再分配 2 页块
-├── 6. 分裂验证                        // 8 页块释放后再分配 1 页块
-├── 7. 非 2 的幂请求                    // alloc_pages(3) 成功，按 4 页归还
+├── 5. 伙伴合并验证          
+├── 6. 分裂验证            
+├── 7. 非 2 的幂请求        
 ├── 8. 超界请求失败                     // alloc_pages(2^(MAX_ORDER+1)) == NULL
 ├── 9. 终态汇总校验                     // 与初始完全一致
 └── buddy_check_consistency()          // 出口：再次校验基线不变量
@@ -476,26 +485,12 @@ static void buddy_check_consistency(void) {
 | 2 | 调用 `buddy_basic_check()` | 内部全部断言 | 基础路径 |
 | 3 | `alloc_pages(1/2/4/8)` | 四者非空；`!PageProperty(·)` | **跨阶分配**：覆盖阶 0/1/2/3 的取块与分裂路径 |
 | 4 | `free_pages(1/2/4/8)` | `total_free == nr_free_pages()` | 跨阶释放；`total_free` 与分阶统计仍一致 |
-| 5 | `a=alloc_pages(1); b=alloc_pages(1); free(a); free(b); alloc_pages(2)` | 2 页分配**成功** | **伙伴合并**：两个相邻 1 页块释放后必须能合并出 2 页块（若合并失效，此处会因最高阶块已被切碎而失败） |
-| 6 | `alloc_pages(8)` → 释放 → `alloc_pages(1)` ×2 | 全部非空 | **分裂**：大块释放后必须能重新切给小请求，验证分裂链的完整性 |
-| 7 | `alloc_pages(3)` → `free_pages(p3, 4)` | 分配非空 | **非 2 的幂请求**：内部按阶 2（4 页）服务；注释明确要求按实际块大小归还 |
+| 5 | `check_coalesce()`| | |
+| 6 | `check_split()` |  | |
+| 7 | `check_non_power_of_two()`|| |
 | 8 | `alloc_pages(1UL << (MAX_ORDER + 1))` | `== NULL` | **超界失败**：请求超过 `MAX_ORDER` 必须优雅返回 `NULL`（而不是 `1UL << order` 溢出或越界访问 `free_area`） |
 | 9 | 终态汇总 | `Σ nr_free == total_free == nr_free_pages()` | 所有用例归还完毕后，空闲页数必须与初始一致——**零泄漏** |
 | 10 | `buddy_check_consistency()` | I1–I3 | 端到端不变量校验 |
-
-覆盖矩阵（对 §4 各分支的映射）：
-
-| 算法分支 | 覆盖用例 |
-|---------|---------|
-| `alloc`：快速失败 `n > total_free` | 基础检查步骤 5、8 |
-| `alloc`：`order > MAX_ORDER` | 完整检查步骤 8 |
-| `alloc`：向上找块（跨阶） | 完整检查步骤 3、5、6 |
-| `alloc`：逐级分裂 | 完整检查步骤 3、6 |
-| `free`：无伙伴可合并 | 基础检查步骤 6 |
-| `free`：伙伴已分配（停止合并） | 完整检查步骤 5 的第一次 `free(a)` |
-| `free`：伙伴阶不匹配（停止合并） | §4.4 示例中的阶 2/3 检查，由步骤 5、6 的连锁合并覆盖 |
-| `free`：级联合并至更大阶 | 完整检查步骤 5、6 |
-| 计数：`total_free` / `nr_free` | 所有步骤的汇总断言 |
 
 ---
 

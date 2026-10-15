@@ -167,7 +167,7 @@ int another_function(int arg);
 
 #### 任务三：buddy system（伙伴系统）分配算法
 **负责人：**  乐嘉文
-见 [buddy_system设计文档](./buddy_system设计文档.md)
+见 [详细版报告](./buddy_system设计文档/详细版.md) 和 [精简版报告](./buddy_system设计文档/精简版.md)
 
 #### Challenge：任意大小的内存单元 slub 分配算法
 **负责人：**  朱万旭

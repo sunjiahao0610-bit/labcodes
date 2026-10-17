@@ -79,8 +79,8 @@ static void page_init(void) {
 
     uint64_t maxpa = mem_end;
 
-    if (maxpa > KERNTOP) {
-        maxpa = KERNTOP;
+    if (maxpa > PADDR(KERNTOP)) {
+        maxpa = PADDR(KERNTOP);
     }
 
     extern char end[];
@@ -98,7 +98,7 @@ static void page_init(void) {
     uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * (npage - nbase));
 
     mem_begin = ROUNDUP(freemem, PGSIZE);
-    mem_end = ROUNDDOWN(mem_end, PGSIZE);
+    mem_end = ROUNDDOWN(maxpa, PGSIZE);
     if (freemem < mem_end) {
         init_memmap(pa2page(mem_begin), (mem_end - mem_begin) / PGSIZE);
     }

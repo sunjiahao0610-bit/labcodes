@@ -4,12 +4,9 @@
 #include <best_fit_pmm.h>
 #include <stdio.h>
 
-/* LAB2 EXERCISE 2: YOUR CODE
- * Keep free block heads in address order, and scan for the smallest block
- * that can satisfy each request. Only free block heads carry PG_property;
- * ordinary allocated pages remain non-reserved. The list and page count
- * are the complete allocator state, including during the checks below.
- */
+//lab2 function2-2 2511676
+
+// Framework tests: students must not modify basic_check or best_fit_check.
 static free_area_t free_area;
 
 #define free_list (free_area.free_list)

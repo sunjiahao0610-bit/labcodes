@@ -236,6 +236,9 @@ check_alloc_page() succeeded!
 
 ![buddy_system](./images/buddy_system测试.png)
 
+### SLUB内存分配算法测试：
+![SLUB内存分配算法测试](./images/SLUB测试.png)
+
 ## 六、实验总结与收获
 
 ### 对操作系统的理解

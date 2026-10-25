@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <dtb.h>
-
+#include <slub.h>
 int kern_init(void) __attribute__((noreturn));
 void grade_backtrace(void);
 void print_kerninfo(void);
@@ -38,6 +38,10 @@ int kern_init(void) {
 
     // grade_backtrace();
     pmm_init();  // init physical memory management
+#if ENABLE_SLUB_CHALLENGE
+    slub_init();
+    slub_check();
+#endif
 
     /* do nothing */
     while (1)

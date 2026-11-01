@@ -15,7 +15,8 @@ void grade_backtrace(void);
 
 int kern_init(void) {
     extern char edata[], end[];
-    // 先清零 BSS，再读取并保存 DTB 的内存信息，避免被清零覆盖（为了解释变化 正式上传时我觉得应该删去这句话）
+    // 先清零 BSS，再读取并保存 DTB 的内存信息，避免被清零覆盖（为了解释变化 
+    //正式上传时我觉得应该删去这句话）
     memset(edata, 0, end - edata);
     dtb_init();
     cons_init();  // init the console

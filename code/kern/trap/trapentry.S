@@ -55,14 +55,14 @@
     .endm
 
     .macro RESTORE_ALL
+    # LAB3 EXERCISE1: restore the final context described by trapframe.
+    # Transfer both return CSRs before restoring the scratch register x5 (t0).
+    LOAD t0, 32*REGBYTES(sp)
+    csrw sstatus, t0
+    LOAD t0, 33*REGBYTES(sp)
+    csrw sepc, t0
 
-    LOAD s1, 32*REGBYTES(sp)
-    LOAD s2, 33*REGBYTES(sp)
-
-    csrw sstatus, s1
-    csrw sepc, s2
-
-    # restore x registers
+    # x0 is hard-wired zero; keep x2 as the frame base until the last load.
     LOAD x1, 1*REGBYTES(sp)
     LOAD x3, 3*REGBYTES(sp)
     LOAD x4, 4*REGBYTES(sp)
@@ -93,18 +93,20 @@
     LOAD x29, 29*REGBYTES(sp)
     LOAD x30, 30*REGBYTES(sp)
     LOAD x31, 31*REGBYTES(sp)
-    # restore sp last
+
+    # Restore the saved pre-trap sp, including any change made by trap().
     LOAD x2, 2*REGBYTES(sp)
     .endm
 
     .globl __alltraps
     .align(2)
 __alltraps:
+    # LAB3 EXERCISE1: save before changing argument or return-address registers.
     SAVE_ALL
-
-    move  a0, sp
-    jal trap
-    # sp should be the same as before "jal trap"
+    # 36 * REGBYTES = 288 bytes on RV64, preserving 16-byte stack alignment.
+    mv a0, sp
+    call trap
+    # The C ABI restores sp to the frame base; fall through to __trapret.
 
     .globl __trapret
 __trapret:

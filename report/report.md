@@ -92,6 +92,7 @@
 
 **需要实现/修改的部分：**
 1.`RESTORE_ALL`(汇编宏)：按照trapframe的布局恢复各通用寄存器，如将status、epc分别写回sstatus、sepc,并在所有依赖trapframe基地址读取完成后再恢复sp，便于sret的进行。
+
 2.`__alltraps`（trap汇编入口）：调用SAVE_ALL保存上下文，并通过a0寄存器保存sp指向的trapframe，再调用C函数trap()进行中断异常处理。函数返回后，进入__trapret，完成上下文恢复和trap返回。
 
 #### 最终提示词
@@ -99,7 +100,9 @@
 
 **最终结果：**
 1.成功通过编译
+
 2.运行测试并通过
+
 3.功能符合预期
 
 

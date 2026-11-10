@@ -88,10 +88,7 @@ size_t nr_free_pages(void)
 }
 
 /* pmm_init - initialize the physical memory management */
-static void page_init(void)
-{
-    extern char kern_entry[];
-
+static void page_init(void) {
     va_pa_offset = PHYSICAL_MEMORY_OFFSET;
 
     uint64_t mem_begin = get_memory_base();
@@ -102,26 +99,21 @@ static void page_init(void)
     uint64_t mem_end   = mem_begin + mem_size;
 
     cprintf("physcial memory map:\n");
-    cprintf("  memory: 0x%08lx, [0x%08lx, 0x%08lx].\n", mem_size, mem_begin,
+    cprintf("  memory: 0x%016lx, [0x%016lx, 0x%016lx].\n", mem_size, mem_begin,
             mem_end - 1);
 
     uint64_t maxpa = mem_end;
 
-    if (maxpa > KERNTOP)
-    {
+    if (maxpa > KERNTOP) {
         maxpa = KERNTOP;
     }
 
     extern char end[];
 
     npage = maxpa / PGSIZE;
-    // BBL has put the initial page table at the first available page after the
-    // kernel
-    // so stay away from it by adding extra offset to end
     pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
 
-    for (size_t i = 0; i < npage - nbase; i++)
-    {
+    for (size_t i = 0; i < npage - nbase; i++) {
         SetPageReserved(pages + i);
     }
 
@@ -129,12 +121,13 @@ static void page_init(void)
 
     mem_begin = ROUNDUP(freemem, PGSIZE);
     mem_end = ROUNDDOWN(mem_end, PGSIZE);
-    if (freemem < mem_end)
-    {
+    if (freemem < mem_end) {
         init_memmap(pa2page(mem_begin), (mem_end - mem_begin) / PGSIZE);
     }
+
     cprintf("vapaofset is %llu\n", va_pa_offset);
 }
+
 static void enable_paging(void)
 {
     write_csr(satp, 0x8000000000000000 | (boot_pgdir_pa >> RISCV_PGSHIFT));

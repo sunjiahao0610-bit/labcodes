@@ -15,51 +15,82 @@ best_fit_init(void) {
 }
 
 static void
+best_fit_insert_block(struct Page *base) {
+    list_entry_t *le = list_next(&free_list);
+    while (le != &free_list) {
+        if (base < le2page(le, page_link)) {
+            break;
+        }
+        le = list_next(le);
+    }
+    /* Inserting before the sentinel also handles an empty list or the tail. */
+    list_add_before(le, &(base->page_link));
+
+    le = list_prev(&(base->page_link));
+    if (le != &free_list) {
+        struct Page *p = le2page(le, page_link);
+        if (p + p->property == base) {
+            p->property += base->property;
+            ClearPageProperty(base);
+            base->property = 0;
+            list_del_init(&(base->page_link));
+            base = p;
+        }
+    }
+
+    /* Use the merged head and length when checking the higher neighbor. */
+    le = list_next(&(base->page_link));
+    if (le != &free_list) {
+        struct Page *p = le2page(le, page_link);
+        if (base + base->property == p) {
+            base->property += p->property;
+            ClearPageProperty(p);
+            p->property = 0;
+            list_del_init(&(p->page_link));
+        }
+    }
+}
+
+static void
 best_fit_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(PageReserved(p));
-        /*LAB2 请补充你在lab2中的代码 */ 
-        
+        p->flags = 0;
+        p->property = 0;
+        set_page_ref(p, 0);
+        list_init(&(p->page_link));
     }
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
-    if (list_empty(&free_list)) {
-        list_add(&free_list, &(base->page_link));
-    } else {
-        list_entry_t* le = &free_list;
-        while ((le = list_next(le)) != &free_list) {
-            struct Page* page = le2page(le, page_link);
-            /*LAB2 请补充你在lab2中的代码 */ 
-
-        }
-    }
+    best_fit_insert_block(base);
 }
 
 static struct Page *
 best_fit_alloc_pages(size_t n) {
     assert(n > 0);
-    if (n > nr_free) {
+    if (n > nr_free || list_empty(&free_list)) {
         return NULL;
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
-    size_t min_size = nr_free + 1;
-    /*LAB2 请补充你在lab2中的代码*/ 
-
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
-        if (p->property >= n) {
+        if (p->property >= n &&
+            (page == NULL || p->property < page->property)) {
             page = p;
-            break;
+            /* Equal-sized candidates keep the lower-address choice. */
+            if (p->property == n) {
+                break;
+            }
         }
     }
 
     if (page != NULL) {
         list_entry_t* prev = list_prev(&(page->page_link));
-        list_del(&(page->page_link));
+        list_del_init(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
@@ -68,6 +99,7 @@ best_fit_alloc_pages(size_t n) {
         }
         nr_free -= n;
         ClearPageProperty(page);
+        page->property = 0;
     }
     return page;
 }
@@ -79,41 +111,14 @@ best_fit_free_pages(struct Page *base, size_t n) {
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
+        p->property = 0;
         set_page_ref(p, 0);
+        list_init(&(p->page_link));
     }
-    /*LAB2 请补充你在lab2中的代码*/
-
-    if (list_empty(&free_list)) {
-        list_add(&free_list, &(base->page_link));
-    } else {
-        list_entry_t* le = &free_list;
-        while ((le = list_next(le)) != &free_list) {
-            struct Page* page = le2page(le, page_link);
-            if (base < page) {
-                list_add_before(le, &(base->page_link));
-                break;
-            } else if (list_next(le) == &free_list) {
-                list_add(le, &(base->page_link));
-            }
-        }
-    }
-
-    list_entry_t* le = list_prev(&(base->page_link));
-    if (le != &free_list) {
-        p = le2page(le, page_link);
-        /*LAB2 请补充你在lab2中的代码*/
-        
-    }
-
-    le = list_next(&(base->page_link));
-    if (le != &free_list) {
-        p = le2page(le, page_link);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
-        }
-    }
+    base->property = n;
+    SetPageProperty(base);
+    nr_free += n;
+    best_fit_insert_block(base);
 }
 
 static size_t

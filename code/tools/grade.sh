@@ -327,15 +327,19 @@ run_qemu
 
 # quick_run 'Check VMM'
 
+pts=10
+quick_check 'check PMM'                                     \
+    '[Test PMM] PASS'
 
-pts=15
-quick_check 'check alloc proc'                                  \
-    'alloc_proc() correct!'
+pts=10
+quick_check 'check Process Create'                          \
+    '[Test Process Create] PASS'
 
-pts=15
-quick_check 'check initproc'                                    \
-    'this initproc, pid = 1, name = "init"'                     \
-    'To U: "Hello world!!".'                                    \
+pts=10
+quick_check 'check Schedule'                                \
+    '[Test Schedule] PASS'                                   \
+    'this initproc, pid = 1, name = "init"'                 \
+    'To U: "Hello world!!".'                                \
     'To U: "en.., Bye, Bye. :)"'
 
 ## print final-score

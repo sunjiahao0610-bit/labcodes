@@ -202,9 +202,16 @@ TOUCH_FILES		:= kern/trap/trap.c
 
 MAKEOPTS		:= --quiet --no-print-directory
 
+GRADE_TMP		:= /tmp/lab4_grade
+
 grade:
 	$(V)$(MAKE) $(MAKEOPTS) clean
-	$(V)$(SH) tools/grade.sh
+	$(V)$(RM) -rf $(GRADE_TMP)
+	$(V)$(MKDIR) $(GRADE_TMP)
+	$(V)tar -C . --exclude=.git --exclude=.vscode --exclude=vcs -cf - . | tar -C $(GRADE_TMP) -xf -
+	$(V)python3 tools/inject.py $(GRADE_TMP)
+	$(V)cd $(GRADE_TMP) && $(SH) tools/grade.sh
+	$(V)$(RM) -rf $(GRADE_TMP)
 
 touch:
 	$(V)$(foreach f,$(TOUCH_FILES),$(TOUCH) $(f))

@@ -54,54 +54,56 @@
 
     .macro RESTORE_ALL
 
-    LOAD s1, 32*REGBYTES(sp)
-    LOAD s2, 33*REGBYTES(sp)
+    LOAD t0, 32*REGBYTES(sp)
+    csrw sstatus, t0
+    LOAD t0, 33*REGBYTES(sp)
+    csrw sepc, t0
 
-    csrw sstatus, s1
-    csrw sepc, s2
+    # x0 is hard-wired zero; keep x2 as the frame base until the last load.
+    LOAD x1, 1*REGBYTES(sp)
+    LOAD x3, 3*REGBYTES(sp)
+    LOAD x4, 4*REGBYTES(sp)
+    LOAD x5, 5*REGBYTES(sp)
+    LOAD x6, 6*REGBYTES(sp)
+    LOAD x7, 7*REGBYTES(sp)
+    LOAD x8, 8*REGBYTES(sp)
+    LOAD x9, 9*REGBYTES(sp)
+    LOAD x10, 10*REGBYTES(sp)
+    LOAD x11, 11*REGBYTES(sp)
+    LOAD x12, 12*REGBYTES(sp)
+    LOAD x13, 13*REGBYTES(sp)
+    LOAD x14, 14*REGBYTES(sp)
+    LOAD x15, 15*REGBYTES(sp)
+    LOAD x16, 16*REGBYTES(sp)
+    LOAD x17, 17*REGBYTES(sp)
+    LOAD x18, 18*REGBYTES(sp)
+    LOAD x19, 19*REGBYTES(sp)
+    LOAD x20, 20*REGBYTES(sp)
+    LOAD x21, 21*REGBYTES(sp)
+    LOAD x22, 22*REGBYTES(sp)
+    LOAD x23, 23*REGBYTES(sp)
+    LOAD x24, 24*REGBYTES(sp)
+    LOAD x25, 25*REGBYTES(sp)
+    LOAD x26, 26*REGBYTES(sp)
+    LOAD x27, 27*REGBYTES(sp)
+    LOAD x28, 28*REGBYTES(sp)
+    LOAD x29, 29*REGBYTES(sp)
+    LOAD x30, 30*REGBYTES(sp)
+    LOAD x31, 31*REGBYTES(sp)
 
-    // restore x registers
-    LOAD  x1,1*REGBYTES(sp)
-    LOAD  x3,3*REGBYTES(sp)
-    LOAD  x4,4*REGBYTES(sp)
-    LOAD  x5,5*REGBYTES(sp)
-    LOAD  x6,6*REGBYTES(sp)
-    LOAD  x7,7*REGBYTES(sp)
-    LOAD  x8,8*REGBYTES(sp)
-    LOAD  x9,9*REGBYTES(sp)
-    LOAD  x10,10*REGBYTES(sp)
-    LOAD  x11,11*REGBYTES(sp)
-    LOAD  x12,12*REGBYTES(sp)
-    LOAD  x13,13*REGBYTES(sp)
-    LOAD  x14,14*REGBYTES(sp)
-    LOAD  x15,15*REGBYTES(sp)
-    LOAD  x16,16*REGBYTES(sp)
-    LOAD  x17,17*REGBYTES(sp)
-    LOAD  x18,18*REGBYTES(sp)
-    LOAD  x19,19*REGBYTES(sp)
-    LOAD  x20,20*REGBYTES(sp)
-    LOAD  x21,21*REGBYTES(sp)
-    LOAD  x22,22*REGBYTES(sp)
-    LOAD  x23,23*REGBYTES(sp)
-    LOAD  x24,24*REGBYTES(sp)
-    LOAD  x25,25*REGBYTES(sp)
-    LOAD  x26,26*REGBYTES(sp)
-    LOAD  x27,27*REGBYTES(sp)
-    LOAD  x28,28*REGBYTES(sp)
-    LOAD  x29,29*REGBYTES(sp)
-    LOAD  x30,30*REGBYTES(sp)
-    LOAD  x31,31*REGBYTES(sp)
-    # restore sp last
-    LOAD  x2,2*REGBYTES(sp)
+    # Restore the saved pre-trap sp, including any change made by trap().
+    LOAD x2, 2*REGBYTES(sp)
     .endm
 
     .globl __alltraps
+    .align(2)
 __alltraps:
+    # LAB3 EXERCISE1: save before changing argument or return-address registers.
     SAVE_ALL
-
-    move  a0, sp
-    jal trap
-    # sp should be the same as before "jal trap"
+    # 36 * REGBYTES = 288 bytes on RV64, preserving 16-byte stack alignment.
+    mv a0, sp
+    call trap
+    # The C ABI restores sp to the frame base; fall through to __trapret.
 
     .globl __trapret
 __trapret:

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <trap.h>
 #include <vmm.h>
+#include <sbi.h>
 
 #define TICK_NUM 100
 
@@ -86,7 +87,6 @@ extern struct mm_struct *check_mm_struct;
 void interrupt_handler(struct trapframe *tf) {
     enum { SHUTDOWN_AFTER = 10 };
     static size_t num = 0;
-    extern void sbi_shutdown(void);
     uintptr_t cause = (tf->cause << 1) >> 1;
     switch (cause) {
         case IRQ_U_SOFT:

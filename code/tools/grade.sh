@@ -11,19 +11,19 @@ else
 fi
 
 ## make & makeopts
-if gmake --version > /dev/null 2>&1; then
-    make=gmake;
+if gmake --version >/dev/null 2>&1; then
+    make=gmake
 else
-    make=make;
+    make=make
 fi
 
 makeopts="--quiet --no-print-directory -j"
 
 make_print() {
-    echo `$make $makeopts print-$1`
+    echo $($make $makeopts print-$1)
 }
 
-echo `$make`
+echo $($make)
 
 ## command tools
 awk='awk'
@@ -65,14 +65,14 @@ total_pos=0
 
 ## default functions
 update_score() {
-    total=`expr $total + $part`
-    total_pos=`expr $total_pos + $part_pos`
+    total=$(expr $total + $part)
+    total_pos=$(expr $total_pos + $part_pos)
     part=0
     part_pos=0
 }
 
 get_time() {
-    echo `$date +%s.%N 2> /dev/null`
+    echo $($date +%s.%N 2>/dev/null)
 }
 
 show_part() {
@@ -91,7 +91,7 @@ show_final() {
 
 show_time() {
     t1=$(get_time)
-    time=`echo "scale=1; ($t1-$t0)/1" | $sed 's/.N/.0/g' | $bc 2> /dev/null`
+    time=$(echo "scale=1; ($t1-$t0)/1" | $sed 's/.N/.0/g' | $bc 2>/dev/null)
     echo "(${time}s)"
 }
 
@@ -114,13 +114,13 @@ show_msg() {
 
 pass() {
     show_msg OK "$@"
-    part=`expr $part + $pts`
-    part_pos=`expr $part_pos + $pts`
+    part=$(expr $part + $pts)
+    part_pos=$(expr $part_pos + $pts)
 }
 
 fail() {
     show_msg WRONG "$@"
-    part_pos=`expr $part_pos + $pts`
+    part_pos=$(expr $part_pos + $pts)
 }
 
 run_qemu() {
@@ -132,14 +132,14 @@ run_qemu() {
     fi
 
     if [ -z "$timeout" ] || [ $timeout -le 0 ]; then
-        timeout=$default_timeout;
+        timeout=$default_timeout
     fi
 
     t0=$(get_time)
     (
         ulimit -t $timeout
         exec $qemu -nographic $qemuopts -serial file:$qemu_out -monitor null -no-reboot $qemuextra
-    ) > $out 2> $err &
+    ) >$out 2>$err &
     pid=$!
 
     # wait for QEMU to start
@@ -147,8 +147,8 @@ run_qemu() {
 
     if [ -n "$brkfun" ]; then
         # find the address of the kernel $brkfun function
-        brkaddr=`$grep " $brkfun\$" $sym_table | $sed -e's/ .*$//g'`
-        brkaddr_phys=`echo $brkaddr | sed "s/^c0/00/g"`
+        brkaddr=$($grep " $brkfun$" $sym_table | $sed -e's/ .*$//g')
+        brkaddr_phys=$(echo $brkaddr | sed "s/^c0/00/g")
         (
             echo "target remote localhost:$gdbport"
             echo "break *0x$brkaddr"
@@ -156,13 +156,13 @@ run_qemu() {
                 echo "break *0x$brkaddr_phys"
             fi
             echo "continue"
-        ) > $gdb_in
+        ) >$gdb_in
 
-        $gdb -batch -nx -x $gdb_in > /dev/null 2>&1
+        $gdb -batch -nx -x $gdb_in >/dev/null 2>&1
 
         # make sure that QEMU is dead
         # on OS X, exiting gdb doesn't always exit qemu
-        kill $pid > /dev/null 2>&1
+        kill $pid >/dev/null 2>&1
     fi
 }
 
@@ -174,7 +174,7 @@ build_run() {
     if $verbose; then
         echo "$make $@ ..."
     fi
-    $make $makeopts $@ 'DEFS+=-DDEBUG_GRADE' > $out 2> $err
+    $make $makeopts $@ 'DEFS+=-DDEBUG_GRADE' >$out 2>$err
 
     if [ $? -ne 0 ]; then
         echo $make $@ failed
@@ -186,7 +186,7 @@ build_run() {
 
     show_time
 
-    cp $qemu_out .`echo $tag | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g'`.log
+    cp $qemu_out .$(echo $tag | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g').log
 }
 
 check_result() {
@@ -200,7 +200,7 @@ check_result() {
     fi
 
     if [ ! -s $qemu_out ]; then
-        fail > /dev/null
+        fail >/dev/null
         echo 'no $qemu_out'
     else
         check=$1
@@ -214,16 +214,16 @@ check_regexps() {
     not=0
     reg=0
     error=
-    for i do
+    for i; do
         if [ "x$i" = "x!" ]; then
             not=1
         elif [ "x$i" = "x-" ]; then
             reg=1
         else
             if [ $reg -ne 0 ]; then
-                $grep '-E' "^$i\$" $qemu_out > /dev/null
+                $grep '-E' "^$i\$" $qemu_out >/dev/null
             else
-                $grep '-F' "$i" $qemu_out > /dev/null
+                $grep '-F' "$i" $qemu_out >/dev/null
             fi
             found=$(($? == 0))
             if [ $found -eq $not ]; then
@@ -260,10 +260,10 @@ run_test() {
     while true; do
         select=
         case $1 in
-            -tag)
-                select=`expr substr $1 2 ${#1}`
-                eval $select='$2'
-                ;;
+        -tag)
+            select=$(expr substr $1 2 ${#1})
+            eval $select='$2'
+            ;;
         esac
         if [ -z "$select" ]; then
             break
@@ -272,7 +272,7 @@ run_test() {
         shift
     done
     defs=
-    while expr "x$1" : "x-D.*" > /dev/null; do
+    while expr "x$1" : "x-D.*" >/dev/null; do
         defs="DEFS+='$1' $defs"
         shift
     done
@@ -282,7 +282,7 @@ run_test() {
         shift
     fi
 
-    $make $makeopts touch > /dev/null 2>&1
+    $make $makeopts touch >/dev/null 2>&1
     build_run "$tag" "$defs"
 
     check_result 'check result' "$check" "$@"
@@ -293,12 +293,12 @@ quick_run() {
     tag="$1"
     shift
     defs=
-    while expr "x$1" : "x-D.*" > /dev/null; do
+    while expr "x$1" : "x-D.*" >/dev/null; do
         defs="DEFS+='$1' $defs"
         shift
     done
 
-    $make $makeopts touch > /dev/null 2>&1
+    $make $makeopts touch >/dev/null 2>&1
     build_run "$tag" "$defs"
 }
 
@@ -316,7 +316,7 @@ osimg=$(make_print ucoreimg)
 swapimg=$(make_print swapimg)
 
 ## set default qemu-options
-qemuopts="-machine virt -nographic -bios default -device loader,file=bin/ucore.img,addr=0x80200000"
+qemuopts="-machine virt -nographic -bios default -kernel bin/ucore.img"
 
 ## set break-function, default is readline
 brkfun=readline
@@ -328,18 +328,18 @@ run_qemu
 # quick_run 'Check VMM'
 
 pts=10
-quick_check 'check PMM'                                     \
+quick_check 'check PMM' \
     '[Test PMM] PASS'
 
 pts=10
-quick_check 'check Process Create'                          \
+quick_check 'check Process Create' \
     '[Test Process Create] PASS'
 
 pts=10
-quick_check 'check Schedule'                                \
-    '[Test Schedule] PASS'                                   \
-    'this initproc, pid = 1, name = "init"'                 \
-    'To U: "Hello world!!".'                                \
+quick_check 'check Schedule' \
+    '[Test Schedule] PASS' \
+    'this initproc, pid = 1, name = "init"' \
+    'To U: "Hello world!!".' \
     'To U: "en.., Bye, Bye. :)"'
 
 ## print final-score

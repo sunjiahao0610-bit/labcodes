@@ -140,63 +140,60 @@ void interrupt_handler(struct trapframe *tf) {
     }
 }
 
-void exception_handler(struct trapframe *tf) {
-    switch (tf->cause) {
-        case CAUSE_MISALIGNED_FETCH:
-            print_trapframe(tf);
-            break;
-        case CAUSE_FAULT_FETCH:
-            print_trapframe(tf);
-            break;
-        case CAUSE_ILLEGAL_INSTRUCTION: {
-            uintptr_t epc = tf->epc;
-            cprintf("Illegal instruction at 0x%016lx\n", (unsigned long)epc);
-            uint16_t instruction = *(const uint16_t *)epc;
-            if ((instruction & 0x3) != 0x3) {
-                tf->epc = epc + 2;
-            } else if ((instruction & 0x1c) != 0x1c) {
-                tf->epc = epc + 4;
-            }
-            break;
-        }
-        case CAUSE_BREAKPOINT: {
-            uintptr_t epc = tf->epc;
-            cprintf("Breakpoint at 0x%016lx\n", (unsigned long)epc);
-            uint16_t instruction = *(const uint16_t *)epc;
-            if ((instruction & 0x3) != 0x3) {
-                tf->epc = epc + 2;
-            } else if ((instruction & 0x1c) != 0x1c) {
-                tf->epc = epc + 4;
-            }
-            break;
-        }
-        case CAUSE_MISALIGNED_LOAD:
-            print_trapframe(tf);
-            break;
-        case CAUSE_FAULT_LOAD:
-            print_trapframe(tf);
-            break;
-        case CAUSE_MISALIGNED_STORE:
-            print_trapframe(tf);
-            break;
-        case CAUSE_FAULT_STORE:
-            print_trapframe(tf);
-            break;
-        case CAUSE_USER_ECALL:
-            print_trapframe(tf);
-            break;
-        case CAUSE_SUPERVISOR_ECALL:
-            print_trapframe(tf);
-            break;
-        case CAUSE_HYPERVISOR_ECALL:
-            print_trapframe(tf);
-            break;
-        case CAUSE_MACHINE_ECALL:
-            print_trapframe(tf);
-            break;
-        default:
-            print_trapframe(tf);
-            break;
+void exception_handler(struct trapframe *tf)
+{
+    int ret;
+    switch (tf->cause)
+    {
+    case CAUSE_MISALIGNED_FETCH:
+        cprintf("Instruction address misaligned\n");
+        break;
+    case CAUSE_FETCH_ACCESS:
+        cprintf("Instruction access fault\n");
+        break;
+    case CAUSE_ILLEGAL_INSTRUCTION:
+        cprintf("Illegal instruction\n");
+        break;
+    case CAUSE_BREAKPOINT:
+        cprintf("Breakpoint\n");
+        break;
+    case CAUSE_MISALIGNED_LOAD:
+        cprintf("Load address misaligned\n");
+        break;
+    case CAUSE_LOAD_ACCESS:
+        cprintf("Load access fault\n");
+
+        break;
+    case CAUSE_MISALIGNED_STORE:
+        cprintf("AMO address misaligned\n");
+        break;
+    case CAUSE_STORE_ACCESS:
+        cprintf("Store/AMO access fault\n");
+        break;
+    case CAUSE_USER_ECALL:
+        cprintf("Environment call from U-mode\n");
+        break;
+    case CAUSE_SUPERVISOR_ECALL:
+        cprintf("Environment call from S-mode\n");
+        break;
+    case CAUSE_HYPERVISOR_ECALL:
+        cprintf("Environment call from H-mode\n");
+        break;
+    case CAUSE_MACHINE_ECALL:
+        cprintf("Environment call from M-mode\n");
+        break;
+    case CAUSE_FETCH_PAGE_FAULT:
+        cprintf("Instruction page fault\n");
+        break;
+    case CAUSE_LOAD_PAGE_FAULT:
+        cprintf("Load page fault\n");
+        break;
+    case CAUSE_STORE_PAGE_FAULT:
+        cprintf("Store/AMO page fault\n");
+        break;
+    default:
+        print_trapframe(tf);
+        break;
     }
 }
 

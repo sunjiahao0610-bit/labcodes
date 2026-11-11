@@ -258,7 +258,7 @@ best_fit_check(void) {
     #endif
 }
 //这个结构体在
-const struct pmm_manager best_fit_pmm_manager = {
+const struct pmm_manager default_pmm_manager = {
     .name = "best_fit_pmm_manager",
     .init = best_fit_init,
     .init_memmap = best_fit_init_memmap,

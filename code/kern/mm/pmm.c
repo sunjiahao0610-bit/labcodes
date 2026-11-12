@@ -404,11 +404,11 @@ static void check_boot_pgdir(void)
 {
     size_t nr_free_store;
     pte_t *ptep;
-    int i;
+    uintptr_t i;
 
     nr_free_store = nr_free_pages();
 
-    for (i = ROUNDDOWN(KERNBASE, PGSIZE); i < npage * PGSIZE; i += PGSIZE)
+    for (i = DRAM_BASE; i < DRAM_BASE + npage * PGSIZE; i += PGSIZE)
     {
         assert((ptep = get_pte(boot_pgdir_va, (uintptr_t)KADDR(i), 0)) != NULL);
         assert(PTE_ADDR(*ptep) == i);

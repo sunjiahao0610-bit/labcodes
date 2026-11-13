@@ -104,7 +104,20 @@ alloc_proc(void)
          *       uint32_t flags;                             // Process flag
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
-        
+        proc->state = PROC_UNINIT;
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = NULL;
+        proc->mm = NULL;
+        memset(&proc->context, 0, sizeof(proc->context));
+        proc->tf = NULL;
+        proc->pgdir = boot_pgdir_pa;
+        proc->flags = 0;
+        memset(proc->name, 0, sizeof(proc->name));
+        list_init(&proc->list_link);
+        list_init(&proc->hash_link);
     }
     return proc;
 }
@@ -322,7 +335,35 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     //    5. insert proc_struct into hash_list && proc_list
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
-    
+    if ((proc = alloc_proc()) == NULL)
+    {
+        goto fork_out;
+    }
+    proc->parent = current;
+
+    if ((ret = setup_kstack(proc)) != 0)
+    {
+        goto bad_fork_cleanup_proc;
+    }
+    if ((ret = copy_mm(clone_flags, proc)) != 0)
+    {
+        goto bad_fork_cleanup_kstack;
+    }
+    copy_thread(proc, stack, tf);
+
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        proc->pid = get_pid();
+        hash_proc(proc);
+        list_add(&proc_list, &proc->list_link);
+        nr_process++;
+    }
+    local_intr_restore(intr_flag);
+
+    wakeup_proc(proc);
+    ret = proc->pid;
+
 fork_out:
     return ret;
 
@@ -371,12 +412,23 @@ void proc_init(void)
 
     // check the proc structure
     int *context_mem = (int *)kmalloc(sizeof(struct context));
+    if (context_mem == NULL)
+    {
+        panic("cannot alloc context check memory.\n");
+    }
     memset(context_mem, 0, sizeof(struct context));
     int context_init_flag = memcmp(&(idleproc->context), context_mem, sizeof(struct context));
 
-    int *proc_name_mem = (int *)kmalloc(PROC_NAME_LEN);
-    memset(proc_name_mem, 0, PROC_NAME_LEN);
-    int proc_name_flag = memcmp(&(idleproc->name), proc_name_mem, PROC_NAME_LEN);
+    char *proc_name_mem = (char *)kmalloc(sizeof(idleproc->name));
+    if (proc_name_mem == NULL)
+    {
+        kfree(context_mem);
+        panic("cannot alloc name check memory.\n");
+    }
+    memset(proc_name_mem, 0, sizeof(idleproc->name));
+    int proc_name_flag = memcmp(&(idleproc->name), proc_name_mem, sizeof(idleproc->name));
+    kfree(proc_name_mem);
+    kfree(context_mem);
 
     if (idleproc->pgdir == boot_pgdir_pa && idleproc->tf == NULL && !context_init_flag && idleproc->state == PROC_UNINIT && idleproc->pid == -1 && idleproc->runs == 0 && idleproc->kstack == 0 && idleproc->need_resched == 0 && idleproc->parent == NULL && idleproc->mm == NULL && idleproc->flags == 0 && !proc_name_flag)
     {
@@ -399,10 +451,10 @@ void proc_init(void)
     }
 
     initproc = find_proc(pid);
-    set_proc_name(initproc, "init");
 
     assert(idleproc != NULL && idleproc->pid == 0);
     assert(initproc != NULL && initproc->pid == 1);
+    set_proc_name(initproc, "init");
 }
 
 // cpu_idle - at the end of kern_init, the first kernel thread idleproc will do below works

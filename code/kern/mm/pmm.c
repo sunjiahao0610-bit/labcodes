@@ -131,6 +131,7 @@ static void page_init(void) {
 static void enable_paging(void)
 {
     write_csr(satp, 0x8000000000000000 | (boot_pgdir_pa >> RISCV_PGSHIFT));
+    flush_tlb();
 }
 
 // boot_map_segment - setup&enable the paging mechanism
@@ -190,10 +191,16 @@ void pmm_init(void)
     // use pmm->check to verify the correctness of the alloc/free function in a
     // pmm
     check_alloc_page();
-    // create boot_pgdir, an initial page directory(Page Directory Table, PDT)
-    extern char boot_page_table_sv39[];
-    boot_pgdir_va = (pte_t *)boot_page_table_sv39;
+    // Build a separate 4 KiB page mapping before replacing the bootstrap's
+    // 1 GiB leaves: get_pte() expects all three page-table levels to exist.
+    boot_pgdir_va = boot_alloc_page();
+    memset(boot_pgdir_va, 0, PGSIZE);
     boot_pgdir_pa = PADDR(boot_pgdir_va);
+
+    boot_map_segment(boot_pgdir_va, (uintptr_t)KADDR(DRAM_BASE),
+                     npage * PGSIZE - DRAM_BASE, DRAM_BASE,
+                     PTE_R | PTE_W | PTE_X | PTE_A | PTE_D);
+    enable_paging();
 
     check_pgdir();
 
@@ -369,7 +376,8 @@ static void check_pgdir(void)
     assert((ptep = get_pte(boot_pgdir_va, PGSIZE, 0)) != NULL);
     assert(*ptep & PTE_U);
     assert(*ptep & PTE_W);
-    assert(boot_pgdir_va[0] & PTE_U);
+    // Sv39 reserves the U bit in non-leaf entries; it must remain clear.
+    assert((boot_pgdir_va[0] & PTE_U) == 0);
     assert(page_ref(p2) == 1);
 
     assert(page_insert(boot_pgdir_va, p1, PGSIZE, 0) == 0);
@@ -408,7 +416,8 @@ static void check_boot_pgdir(void)
 
     nr_free_store = nr_free_pages();
 
-    for (i = DRAM_BASE; i < DRAM_BASE + npage * PGSIZE; i += PGSIZE)
+    // npage is the physical end page number, including the DRAM base.
+    for (i = DRAM_BASE; i < npage * PGSIZE; i += PGSIZE)
     {
         assert((ptep = get_pte(boot_pgdir_va, (uintptr_t)KADDR(i), 0)) != NULL);
         assert(PTE_ADDR(*ptep) == i);

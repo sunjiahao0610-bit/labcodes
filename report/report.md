@@ -145,7 +145,27 @@ int another_function(int arg);
 
 **负责人：** 2511676-孙家昊
 
----
+#### 模块功能描述
+
+本模块在 `code/kern/process/proc.c` 中完成内核线程的创建与登记：初始化进程控制块，将启动执行流包装为 `idleproc`，为 `initproc` 分配资源并构造首次调度所需的执行现场，最后登记到进程链表和 PID 哈希表。
+
+**需要实现/修改的函数：**
+
+以下六个函数均位于 `code/kern/process/proc.c`。
+
+```c
+static struct proc_struct *alloc_proc(void);
+void proc_init(void);
+int kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags);
+int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf);
+static void copy_thread(struct proc_struct *proc, uintptr_t esp, struct trapframe *tf);
+static int copy_mm(uint32_t clone_flags, struct proc_struct *proc);
+```
+
+#### 最终提示词
+
+完整提示词单独保存于 [模块二最终提示词.md](模块二最终提示词.md)，包含本模块最终使用的 `[PROMPT]`、`[RELY]`、`[GUARANTEE]` 和 `[SPECIFICATION]` 全文。
+
 
 ### 功能模块三：进程调度
 

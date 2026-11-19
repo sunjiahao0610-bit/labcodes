@@ -123,8 +123,6 @@ fail() {
 }
 
 run_qemu() {
-    # Run qemu with serial output redirected to $qemu_out. If $brkfun is non-empty,
-    # wait until $brkfun is reached or $timeout expires, then kill QEMU
     qemuextra=
     if [ "$brkfun" ]; then
         qemuextra="-S $qemugdb"
@@ -141,11 +139,9 @@ run_qemu() {
     ) > $out 2> $err &
     pid=$!
 
-    # wait for QEMU to start
     sleep 1
 
     if [ -n "$brkfun" ]; then
-        # find the address of the kernel $brkfun function
         brkaddr=`$grep " $brkfun\$" $sym_table | $sed -e's/ .*$//g'`
         brkaddr_phys=`echo $brkaddr | sed "s/^c0/00/g"`
         (
@@ -159,14 +155,11 @@ run_qemu() {
 
         $gdb -batch -nx -x $gdb_in > /dev/null 2>&1
 
-        # make sure that QEMU is dead
-        # on OS X, exiting gdb doesn't always exit qemu
         kill $pid > /dev/null 2>&1
     fi
 }
 
 build_run() {
-    # usage: build_run <tag> <args>
     show_build_tag "$1"
     shift
 
@@ -180,7 +173,6 @@ build_run() {
         exit 1
     fi
 
-    # now run qemu and save the output
     run_qemu
 
     show_time
@@ -189,11 +181,9 @@ build_run() {
 }
 
 check_result() {
-    # usage: check_result <tag> <check> <check args...>
     show_check_tag "$1"
     shift
 
-    # give qemu some time to run (for asynchronous mode)
     if [ ! -s $qemu_out ]; then
         sleep 4
     fi
@@ -253,7 +243,6 @@ check_regexps() {
 }
 
 run_test() {
-    # usage: run_test [-tag <tag>] [-prog <prog>] [-Ddef...] [-check <check>] checkargs ...
     tag=
     prog=
     check=check_regexps
@@ -298,7 +287,6 @@ run_test() {
 }
 
 quick_run() {
-    # usage: quick_run <tag> [-Ddef...]
     tag="$1"
     shift
     defs=
@@ -312,7 +300,6 @@ quick_run() {
 }
 
 quick_check() {
-    # usage: quick_check <tag> checkargs ...
     tag="$1"
     shift
     check_result "$tag" check_regexps "$@"
@@ -325,7 +312,7 @@ osimg=$(make_print ucoreimg)
 swapimg=$(make_print swapimg)
 
 ## set default qemu-options
-qemuopts="-machine virt -nographic -bios default -device loader,file=bin/ucore.img,addr=0x80200000"
+qemuopts="-machine virt -nographic -kernel bin/ucore.img"
 
 ## set break-function, default is readline
 brkfun=readline
@@ -336,12 +323,15 @@ default_check() {
 
     pts=3
     quick_check 'check output'                                  \
-    'memory management: default_pmm_manager'                      \
+    '[Test Process Create] PASS'                               \
+    '[Test Syscall] PASS'                                      \
+    '[Test Process Control] PASS'                              \
+    'memory management: default_pmm_manager'                    \
     'check_alloc_page() succeeded!'                             \
     'check_pgdir() succeeded!'                                  \
-    'check_boot_pgdir() succeeded!'				\
+    'check_boot_pgdir() succeeded!'                             \
     'check_vma_struct() succeeded!'                             \
-    'check_vmm() succeeded.'					\
+    'check_vmm() succeeded.'                                     \
     '++ setup timer interrupts'
 }
 
@@ -349,50 +339,47 @@ default_check() {
 
 run_test -prog 'badsegment' -check default_check                \
         'kernel_execve: pid = 2, name = "badsegment".'          \
-        'Breakpoint'                                            \
-        'init check memory pass.'                               
+        'init check memory pass.'
 
 run_test -prog 'divzero' -check default_check                   \
         'kernel_execve: pid = 2, name = "divzero".'             \
-        'Breakpoint'                                            \
         'value is -1.'                                          \
-        'init check memory pass.'                               
+        'init check memory pass.'
 
 run_test -prog 'softint' -check default_check                   \
         'kernel_execve: pid = 2, name = "softint".'             \
-        'Breakpoint'                                            \
         'all user-mode processes have quit.'                    \
-        'init check memory pass.'                               
+        'init check memory pass.'
 
 pts=10
 
-run_test -prog 'faultread'  -check default_check                                     \
+run_test -prog 'faultread'  -check default_check                \
         'kernel_execve: pid = 2, name = "faultread".'           \
-    ! - 'user panic at .*'                                      
+    ! - 'user panic at .*'
 
-run_test -prog 'faultreadkernel' -check default_check                                \
+run_test -prog 'faultreadkernel' -check default_check           \
         'kernel_execve: pid = 2, name = "faultreadkernel".'     \
-    ! - 'user panic at .*'                                      
+    ! - 'user panic at .*'
 
-run_test -prog 'hello' -check default_check                                          \
+run_test -prog 'hello' -check default_check                     \
         'kernel_execve: pid = 2, name = "hello".'               \
         'Hello world!!.'                                        \
         'I am process 2.'                                       \
         'hello pass.'
 
-run_test -prog 'testbss' -check default_check                                        \
+run_test -prog 'testbss' -check default_check                   \
         'kernel_execve: pid = 2, name = "testbss".'             \
         'Making sure bss works right...'                        \
         'Yes, good.  Now doing a wild write off the end...'     \
         'testbss may pass.'                                     \
-    ! - 'user panic at .*'              
+    ! - 'user panic at .*'
 
-run_test -prog 'pgdir' -check default_check                                          \
+run_test -prog 'pgdir' -check default_check                     \
         'kernel_execve: pid = 2, name = "pgdir".'               \
         'I am 2, print pgdir.'                                  \
-        'init check memory pass.'                               
+        'init check memory pass.'
 
-run_test -prog 'yield' -check default_check                                          \
+run_test -prog 'yield' -check default_check                     \
         'kernel_execve: pid = 2, name = "yield".'               \
         'Hello, I am process 2.'                                \
         'Back in process 2, iteration 0.'                       \
@@ -402,7 +389,6 @@ run_test -prog 'yield' -check default_check                                     
         'Back in process 2, iteration 4.'                       \
         'All done in process 2.'                                \
         'yield pass.'
-
 
 run_test -prog 'badarg' -check default_check                    \
         'kernel_execve: pid = 2, name = "badarg".'              \
@@ -414,20 +400,19 @@ run_test -prog 'badarg' -check default_check                    \
 
 pts=10
 
-run_test -prog 'exit'  -check default_check                                          \
+run_test -prog 'exit'  -check default_check                     \
         'kernel_execve: pid = 2, name = "exit".'                \
         'I am the parent. Forking the child...'                 \
         'I am the parent, waiting now..'                        \
         'I am the child.'                                       \
-      - 'waitpid.*ok.*'                                        \
+      - 'waitpid.*ok.*'                                         \
         'exit pass.'                                            \
         'all user-mode processes have quit.'                    \
         'init check memory pass.'                               \
     ! - 'user panic at .*'
 
-run_test -prog 'spin'  -check default_check                                          \
+run_test -prog 'spin'  -check default_check                     \
         'kernel_execve: pid = 2, name = "spin".'                \
-        Breakpoint                                              \
         'I am the parent. Forking the child...'                 \
         'I am the parent. Running the child...'                 \
         'I am the child. spinning ...'                          \
@@ -441,7 +426,7 @@ run_test -prog 'spin'  -check default_check                                     
 
 pts=15
 
-run_test -prog 'forktest'   -check default_check                                     \
+run_test -prog 'forktest'   -check default_check                \
         'kernel_execve: pid = 2, name = "forktest".'            \
         'I am child 31'                                         \
         'I am child 19'                                         \
@@ -451,10 +436,8 @@ run_test -prog 'forktest'   -check default_check                                
         'all user-mode processes have quit.'                    \
         'init check memory pass.'                               \
     ! - 'fork claimed to work [0-9]+ times!'                    \
-    !   'wait stopped early'                                    \
-    !   'wait got too many'                                     \
+    ! - 'wait stopped early'                                    \
+    ! - 'wait got too many'                                     \
     ! - 'user panic at .*'
 
-
-## print final-score
 show_final

@@ -325,30 +325,37 @@ swapimg=$(make_print swapimg)
 
 ## set default qemu-options
 # qemuopts="-hda $osimg -drive file=$swapimg,media=disk,cache=writeback"
-qemuopts="-machine virt -nographic -bios default -device loader,file=bin/ucore.img,addr=0x80200000"
+qemuopts="-machine virt -nographic -kernel bin/ucore.img"
 
 ## set break-function, default is readline
 brkfun=readline
 
 default_check() {
-    pts=40
+    pts=10
+    quick_check 'RR Scheduler'                                  \
+    '[Test RR Scheduler] PASS'
+
+    pts=10
+    quick_check 'Stride Scheduler'                              \
+    '[Test Stride Scheduler] PASS'
+
+    pts=30
     check_regexps "$@"
 
     pts=10
     quick_check 'check output'                                  \
-    'memory management: default_pmm_manager'                      \
+    'memory management: default_pmm_manager'                    \
     'check_alloc_page() succeeded!'                             \
     'check_pgdir() succeeded!'                                  \
-    'check_boot_pgdir() succeeded!'				\
-    'kmalloc_init() succeeded!'                             \
+    'check_boot_pgdir() succeeded!'                             \
+    'kmalloc_init() succeeded!'                                 \
     'check_vma_struct() succeeded!'                             \
-    'check_vmm() succeeded.'					\
+    'check_vmm() succeeded.'                                    \
     '++ setup timer interrupts'
 }
 
 ## check now!!
 run_test -prog 'priority'      -check default_check             \
-        'sched class: RR_scheduler'                         \
         'kernel_execve: pid = 2, name = "priority".'            \
         'main: fork ok,now need to wait pids.'                  \
         'set priority to 5'                                     \
@@ -359,6 +366,7 @@ run_test -prog 'priority'      -check default_check             \
         'all user-mode processes have quit.'                    \
         'init check memory pass.'                               \
     ! - 'user panic at .*'
+
 
 ## print final-score
 show_final

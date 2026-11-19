@@ -23,7 +23,7 @@ wait(void) {
 
 int
 waitpid(int pid, int *store) {
-    return sys_wait(pid, store);
+    return sys_wait(pid, (int64_t *)store);
 }
 
 void

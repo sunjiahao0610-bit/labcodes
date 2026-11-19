@@ -160,7 +160,7 @@ $(SFSROOT):
 	$(V)$(MKDIR) $@
 
 $(SFSIMG): $(SFSROOT) $(SFSBINS) | $(call totarget,mksfs)
-	$(V)dd if=/dev/zero of=$@ bs=1kB count=480
+	$(V)dd if=/dev/zero of=$@ bs=1kB count=2048
 	@$(call totarget,mksfs) $@ $(SFSROOT)
 
 $(call create_target,sfs.img)
@@ -265,15 +265,13 @@ qemu: $(UCOREIMG) $(SWAPIMG) $(SFSIMG)
 	$(V)$(QEMU) \
 		-machine virt \
 		-nographic \
-		-bios default \
-		-device loader,file=$(UCOREIMG),addr=0x80200000
+		-kernel $(UCOREIMG)
 
 debug: $(UCOREIMG) $(SWAPIMG) $(SFSIMG)
 	$(V)$(QEMU) \
 		-machine virt \
 		-nographic \
-		-bios default \
-		-device loader,file=$(UCOREIMG),addr=0x80200000\
+		-kernel $(UCOREIMG) \
 		-s -S
 
 gdb:
@@ -316,9 +314,19 @@ TOUCH_FILES		:= kern/process/proc.c
 
 MAKEOPTS		:= --quiet --no-print-directory
 
+# lab8 adopts injection-based grading: copy this directory to a temp tree, inject the
+# tests, build&run and match PASS sentinels. The student's original sources (this
+# directory) are never modified; the test code only appears in the grading temp copy.
+GRADE_TMP	:= /tmp/lab8_grade
+
 grade:
 	$(V)$(MAKE) $(MAKEOPTS) clean
-	$(V)$(SH) tools/grade-rv64-patch.sh
+	$(V)$(RM) -rf $(GRADE_TMP)
+	$(V)$(MKDIR) $(GRADE_TMP)
+	$(V)tar -C . --exclude=.git --exclude=.vscode --exclude=vcs -cf - . | tar -C $(GRADE_TMP) -xf -
+	$(V)python3 tools/inject.py $(GRADE_TMP)
+	$(V)cd $(GRADE_TMP) && $(SH) tools/grade.sh
+	$(V)$(RM) -rf $(GRADE_TMP)
 
 touch:
 	$(V)$(foreach f,$(TOUCH_FILES),$(TOUCH) $(f))

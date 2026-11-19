@@ -20,3 +20,6 @@ tags
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# SFS 镜像构建目录
+disk0/

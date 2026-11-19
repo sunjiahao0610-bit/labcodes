@@ -154,7 +154,7 @@ static void boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size,
     {
         pte_t *ptep = get_pte(pgdir, la, 1);
         assert(ptep != NULL);
-        *ptep = pte_create(pa >> PGSHIFT, PTE_V | perm);
+        *ptep = pte_create(pa >> PGSHIFT, PTE_V | perm | PTE_A | PTE_D);
     }
 }
 
@@ -216,8 +216,8 @@ switch_kernel_memorylayout()
         bootstack[-PGSIZE] = 0;
 
         // set pages beneath and above the kernel stack as guardians
-        boot_map_segment(boot_pgdir_va, bootstackguard, PGSIZE, PADDR(bootstackguard), 0);
-        boot_map_segment(boot_pgdir_va, boot_page_table_sv39, PGSIZE, PADDR(boot_page_table_sv39), 0);
+        boot_map_segment(boot_pgdir_va, (uintptr_t)bootstackguard, PGSIZE, PADDR(bootstackguard), 0);
+        boot_map_segment(boot_pgdir_va, (uintptr_t)boot_page_table_sv39, PGSIZE, PADDR(boot_page_table_sv39), 0);
         flush_tlb();
 
         // the following four statements should all crash
@@ -287,7 +287,7 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         set_page_ref(page, 1);
         uintptr_t pa = page2pa(page);
         memset(KADDR(pa), 0, PGSIZE);
-        *pdep1 = pte_create(page2ppn(page), PTE_U | PTE_V);
+        *pdep1 = pte_create(page2ppn(page), PTE_V);
     }
 
     pde_t *pdep0 = &((pde_t *)KADDR(PDE_ADDR(*pdep1)))[PDX0(la)];
@@ -301,7 +301,7 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         set_page_ref(page, 1);
         uintptr_t pa = page2pa(page);
         memset(KADDR(pa), 0, PGSIZE);
-        *pdep0 = pte_create(page2ppn(page), PTE_U | PTE_V);
+        *pdep0 = pte_create(page2ppn(page), PTE_V);
     }
     return &((pte_t *)KADDR(PDE_ADDR(*pdep0)))[PTX(la)];
 }
@@ -527,7 +527,7 @@ int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
             page_remove_pte(pgdir, la, ptep);
         }
     }
-    *ptep = pte_create(page2ppn(page), PTE_V | perm);
+    *ptep = pte_create(page2ppn(page), PTE_V | perm | PTE_A | PTE_D);
     tlb_invalidate(pgdir, la);
     return 0;
 }
@@ -601,7 +601,7 @@ static void check_pgdir(void)
     assert((ptep = get_pte(boot_pgdir_va, PGSIZE, 0)) != NULL);
     assert(*ptep & PTE_U);
     assert(*ptep & PTE_W);
-    assert(boot_pgdir_va[0] & PTE_U);
+    /* QEMU >= 8 (Sv39): non-leaf PTEs must not set U. */
     assert(page_ref(p2) == 1);
 
     assert(page_insert(boot_pgdir_va, p1, PGSIZE, 0) == 0);

@@ -5,6 +5,9 @@
 #include <pmm.h>
 #include <assert.h>
 size_t max_swap_offset;
+
+/* lab8 ships no kern/mm/swap.h; keep the swap-entry helper local. */
+#define swap_offset(entry) ((size_t)((entry) >> 8))
 void swapfs_init(void)
 {
     static_assert((PGSIZE % SECTSIZE) == 0);

@@ -10,4 +10,5 @@
 - [lab6](https://github.com/sunjiahao0610-bit/labcodes/tree/lab6)：进程调度
 - [lab7](https://github.com/sunjiahao0610-bit/labcodes/tree/lab7)：同步互斥
 - [lab8](https://github.com/sunjiahao0610-bit/labcodes/tree/lab8)：文件系统
+- [lab9](https://github.com/sunjiahao0610-bit/labcodes/tree/lab9)：页面置换与内存映射
 > 点击上面的 `labx` 可以直接跳转到对应实验分支。

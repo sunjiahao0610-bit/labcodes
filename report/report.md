@@ -42,7 +42,7 @@
 |------|------------|---------|------|
 | 2513628-乐嘉文 | DeepSeek Harness | DeepSeek-V4.1-Flash | |
 | 2511676-孙家昊 | Codex | GPT6.1-sol | |
-| 2510777-朱万旭 | Codex| GPT6.1-sol | |
+| 2510777-朱万旭 | Codex| GPT6.2-astra | |
 
 **说明：**
 - **AI 编程工具**：指具体使用的终端工具、编辑器插件、桌面应用或浏览器界面
@@ -171,6 +171,27 @@ static int copy_mm(uint32_t clone_flags, struct proc_struct *proc);
 
 **负责人：** 2510777-朱万旭
 
+本模块实现内核线程的调度与上下文切换。空闲线程在`need_resched`为1时调用调度器。调度器循环遍历进程链表，跳过链表头哨兵和不可运行的线程，选择下一个可运行线程并更新其运行次数。没有其他可运行线程时，选择兜底的空闲线程`idleproc`。
+
+当目标线程与当前线程不同时，内核在中断保护下更新`current`。如果目标线程使用不同的页表，则更新sv39的satp寄存器并刷新TLB缓存。随后保存旧线程的ra、sp和s0至s11寄存器，恢复目标线程的对应寄存器。首次运行的线程通过`forkret`进入启动流程，已运行过的线程从上次切出的位置继续执行。
+
+**需要实现/修改的函数：**
+
+```c
+kern/process/proc.c
+void cpu_idle(void);
+void proc_run(struct proc_struct *proc);
+
+kern/schedule/sched.c
+void schedule(void);
+
+kern/process/switch.S
+void switch_to(struct context *from, struct context *to);
+```
+
+#### 最终提示词
+提示词详见[模块三最终提示词.md](模块三最终提示词.md)
+
 
 ---
 
@@ -185,6 +206,8 @@ static int copy_mm(uint32_t clone_flags, struct proc_struct *proc);
 - 编译及运行成功的输出（make qemu），可能有多个
 - 测试通过的结果（make grade），只有一个
 -->
+![make qemu结果](makeqemu测试截图.png)
+![make grade结果](makegrade验证截图.png)
 
 
 ## 六、实验总结与收获

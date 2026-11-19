@@ -188,16 +188,20 @@ void proc_run(struct proc_struct *proc)
 {
     if (proc != current)
     {
-        // LAB4:EXERCISE3 YOUR CODE
-        /*
-         * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
-         * MACROs or Functions:
-         *   local_intr_save():        Disable interrupts
-         *   local_intr_restore():     Enable Interrupts
-         *   lsatp():                   Modify the value of satp register
-         *   switch_to():              Context switching between two processes
-         */
-
+        bool intr_flag;
+        local_intr_save(intr_flag);
+        struct proc_struct *prev = current;
+        current = proc;
+        // pgdir holds the root physical address, including for kernel threads.
+        uintptr_t satp = ((uintptr_t)SATP_MODE_SV39 << 60) |
+                         (proc->pgdir >> RISCV_PGSHIFT);
+        if (read_csr(satp) != satp)
+        {
+            write_csr(satp, satp);
+            flush_tlb();
+        }
+        switch_to(&prev->context, &proc->context);
+        local_intr_restore(intr_flag);
     }
 }
 
@@ -460,7 +464,7 @@ void proc_init(void)
 // cpu_idle - at the end of kern_init, the first kernel thread idleproc will do below works
 void cpu_idle(void)
 {
-    while (1)
+    for (;;)
     {
         if (current->need_resched)
         {

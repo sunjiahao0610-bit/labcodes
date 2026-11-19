@@ -13,25 +13,25 @@ wakeup_proc(struct proc_struct *proc) {
 void
 schedule(void) {
     bool intr_flag;
-    list_entry_t *le, *last;
-    struct proc_struct *next = NULL;
     local_intr_save(intr_flag);
     {
         current->need_resched = 0;
-        last = (current == idleproc) ? &proc_list : &(current->list_link);
-        le = last;
-        do {
-            if ((le = list_next(le)) != &proc_list) {
-                next = le2proc(le, list_link);
-                if (next->state == PROC_RUNNABLE) {
+        list_entry_t *start = (current == idleproc) ? &proc_list : &current->list_link;
+        struct proc_struct *next = idleproc;
+        for (list_entry_t *le = list_next(start); le != start; le = list_next(le)) {
+            if (le != &proc_list) {
+                struct proc_struct *candidate = le2proc(le, list_link);
+                if (candidate->state == PROC_RUNNABLE) {
+                    next = candidate;
                     break;
                 }
             }
-        } while (le != last);
-        if (next == NULL || next->state != PROC_RUNNABLE) {
-            next = idleproc;
         }
-        next->runs ++;
+        // A lone runnable caller must get the CPU back from the idle loop.
+        if (next == idleproc && current != idleproc && current->state == PROC_RUNNABLE) {
+            idleproc->need_resched = 1;
+        }
+        next->runs++;
         if (next != current) {
             proc_run(next);
         }

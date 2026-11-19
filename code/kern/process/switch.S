@@ -1,7 +1,7 @@
 #include <riscv.h>
 
 .text
-# void switch_to(struct proc_struct* from, struct proc_struct* to)
+# void switch_to(struct context *from, struct context *to)
 .globl switch_to
 switch_to:
     # save from's registers
@@ -21,8 +21,6 @@ switch_to:
     STORE s11, 13*REGBYTES(a0)
 
     # restore to's registers
-    LOAD ra, 0*REGBYTES(a1)
-    LOAD sp, 1*REGBYTES(a1)
     LOAD s0, 2*REGBYTES(a1)
     LOAD s1, 3*REGBYTES(a1)
     LOAD s2, 4*REGBYTES(a1)
@@ -35,5 +33,6 @@ switch_to:
     LOAD s9, 11*REGBYTES(a1)
     LOAD s10, 12*REGBYTES(a1)
     LOAD s11, 13*REGBYTES(a1)
-
+    LOAD sp, 1*REGBYTES(a1)
+    LOAD ra, 0*REGBYTES(a1)
     ret

@@ -6,12 +6,13 @@
 #include <mmu.h>
 #include <pmm.h>
 #include <sbi.h>
-#include <dtb.h>
 #include <stdio.h>
 #include <string.h>
+#include <swap.h>
 #include <sync.h>
 #include <vmm.h>
 #include <riscv.h>
+#include <dtb.h>
 
 // virtual address of physical page array
 struct Page *pages;
@@ -54,9 +55,21 @@ struct Page *alloc_pages(size_t n)
 {
     struct Page *page = NULL;
     bool intr_flag;
-    local_intr_save(intr_flag);
+
+    while (1)
     {
-        page = pmm_manager->alloc_pages(n);
+        local_intr_save(intr_flag);
+        {
+            page = pmm_manager->alloc_pages(n);
+        }
+        local_intr_restore(intr_flag);
+
+        if (page != NULL || n > 1 || swap_init_ok == 0)
+            break;
+
+        extern struct mm_struct *check_mm_struct;
+        // cprintf("page %x, call swap_out in alloc_pages %d\n",page, n);
+        swap_out(check_mm_struct, n, 0);
     }
     local_intr_restore(intr_flag);
     return page;
@@ -154,7 +167,7 @@ static void boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size,
     {
         pte_t *ptep = get_pte(pgdir, la, 1);
         assert(ptep != NULL);
-        *ptep = pte_create(pa >> PGSHIFT, PTE_V | perm);
+        *ptep = pte_create(pa >> PGSHIFT, PTE_V | perm | PTE_A | PTE_D);
     }
 }
 
@@ -216,8 +229,8 @@ switch_kernel_memorylayout()
         bootstack[-PGSIZE] = 0;
 
         // set pages beneath and above the kernel stack as guardians
-        boot_map_segment(boot_pgdir_va, bootstackguard, PGSIZE, PADDR(bootstackguard), 0);
-        boot_map_segment(boot_pgdir_va, boot_page_table_sv39, PGSIZE, PADDR(boot_page_table_sv39), 0);
+        boot_map_segment(boot_pgdir_va, (uintptr_t)bootstackguard, PGSIZE, PADDR(bootstackguard), 0);
+        boot_map_segment(boot_pgdir_va, (uintptr_t)boot_page_table_sv39, PGSIZE, PADDR(boot_page_table_sv39), 0);
         flush_tlb();
 
         // the following four statements should all crash
@@ -287,7 +300,7 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         set_page_ref(page, 1);
         uintptr_t pa = page2pa(page);
         memset(KADDR(pa), 0, PGSIZE);
-        *pdep1 = pte_create(page2ppn(page), PTE_U | PTE_V);
+        *pdep1 = pte_create(page2ppn(page), PTE_V);
     }
 
     pde_t *pdep0 = &((pde_t *)KADDR(PDE_ADDR(*pdep1)))[PDX0(la)];
@@ -301,7 +314,7 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create)
         set_page_ref(page, 1);
         uintptr_t pa = page2pa(page);
         memset(KADDR(pa), 0, PGSIZE);
-        *pdep0 = pte_create(page2ppn(page), PTE_U | PTE_V);
+        *pdep0 = pte_create(page2ppn(page), PTE_V);
     }
     return &((pte_t *)KADDR(PDE_ADDR(*pdep0)))[PTX(la)];
 }
@@ -527,7 +540,7 @@ int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm)
             page_remove_pte(pgdir, la, ptep);
         }
     }
-    *ptep = pte_create(page2ppn(page), PTE_V | perm);
+    *ptep = pte_create(page2ppn(page), PTE_V | perm | PTE_A | PTE_D);
     tlb_invalidate(pgdir, la);
     return 0;
 }
@@ -552,13 +565,27 @@ struct Page *pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm)
             free_page(page);
             return NULL;
         }
-        // swap_map_swappable(check_mm_struct, la, page, 0);
-        page->pra_vaddr = la;
-        assert(page_ref(page) == 1);
-        // cprintf("get No. %d  page: pra_vaddr %x, pra_link.prev %x,
-        // pra_link_next %x in pgdir_alloc_page\n", (page-pages),
-        // page->pra_vaddr,page->pra_page_link.prev,
-        // page->pra_page_link.next);
+        if (swap_init_ok)
+        {
+            if (check_mm_struct != NULL)
+            {
+                swap_map_swappable(check_mm_struct, la, page, 0);
+                page->pra_vaddr = la;
+                assert(page_ref(page) == 1);
+                // cprintf("get No. %d  page: pra_vaddr %x, pra_link.prev %x,
+                // pra_link_next %x in pgdir_alloc_page\n", (page-pages),
+                // page->pra_vaddr,page->pra_page_link.prev,
+                // page->pra_page_link.next);
+            }
+            else
+            { // now current is existed, should fix it in the future
+                // swap_map_swappable(current->mm, la, page, 0);
+                // page->pra_vaddr=la;
+                // assert(page_ref(page) == 1);
+                // panic("pgdir_alloc_page: no pages. now current is existed,
+                // should fix it in the future\n");
+            }
+        }
     }
 
     return page;
@@ -601,7 +628,7 @@ static void check_pgdir(void)
     assert((ptep = get_pte(boot_pgdir_va, PGSIZE, 0)) != NULL);
     assert(*ptep & PTE_U);
     assert(*ptep & PTE_W);
-    assert(boot_pgdir_va[0] & PTE_U);
+    /* QEMU >= 8 (Sv39): non-leaf PTEs must not set U. */
     assert(page_ref(p2) == 1);
 
     assert(page_insert(boot_pgdir_va, p1, PGSIZE, 0) == 0);
@@ -696,8 +723,8 @@ static const char *perm2str(int perm)
 //  table:       the beginning addr of table
 //  left_store:  the pointer of the high side of table's next range
 //  right_store: the pointer of the low side of table's next range
-//  return value: 0 - not a invalid item range, perm - a valid item range with
-//  perm permission
+// return value: 0 - not a invalid item range, perm - a valid item range with
+// perm permission
 static int get_pgtable_items(size_t left, size_t right, size_t start,
                              uintptr_t *table, size_t *left_store,
                              size_t *right_store)

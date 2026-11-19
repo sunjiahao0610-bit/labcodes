@@ -19,6 +19,8 @@ struct vma_struct
     uintptr_t vm_end;        // end addr of vma, not include the vm_end itself
     uint32_t vm_flags;       // flags of vma
     list_entry_t list_link;  // linear list link which sorted by start addr of vma
+    int vm_pgoff;            // file offset in pages
+    struct file *vm_file;    // mapped file pointer
 };
 
 #define le2vma(le, member) \
@@ -52,19 +54,25 @@ void mm_destroy(struct mm_struct *mm);
 void vmm_init(void);
 int mm_map(struct mm_struct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
            struct vma_struct **vma_store);
+int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr);
+
 int mm_unmap(struct mm_struct *mm, uintptr_t addr, size_t len);
 int dup_mmap(struct mm_struct *to, struct mm_struct *from);
 void exit_mmap(struct mm_struct *mm);
 uintptr_t get_unmapped_area(struct mm_struct *mm, size_t len);
 int mm_brk(struct mm_struct *mm, uintptr_t addr, size_t len);
 
-// extern volatile unsigned int pgfault_num;
+extern volatile unsigned int pgfault_num;
 extern struct mm_struct *check_mm_struct;
 
 bool user_mem_check(struct mm_struct *mm, uintptr_t start, size_t len, bool write);
 bool copy_from_user(struct mm_struct *mm, void *dst, const void *src, size_t len, bool writable);
 bool copy_to_user(struct mm_struct *mm, void *dst, const void *src, size_t len);
 bool copy_string(struct mm_struct *mm, char *dst, const char *src, size_t maxn);
+
+uintptr_t do_mmap(struct mm_struct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+                  struct file *file, off_t offset);
+int do_munmap(struct mm_struct *mm, uintptr_t addr, size_t len);
 
 static inline int
 mm_count(struct mm_struct *mm)

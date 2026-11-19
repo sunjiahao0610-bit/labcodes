@@ -242,9 +242,9 @@
 #define barrier() __asm__ __volatile__("fence" ::: "memory")
 
 static inline void
-lsatp(unsigned long pgdir)
+lsatp(unsigned long satp_val)
 {
-  write_csr(satp, 0x8000000000000000 | (pgdir >> RISCV_PGSHIFT));
+  write_csr(satp, 0x8000000000000000 | (satp_val >> RISCV_PGSHIFT));
 }
 
 #endif

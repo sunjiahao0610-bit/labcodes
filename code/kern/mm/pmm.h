@@ -178,5 +178,7 @@ static inline pte_t ptd_create(uintptr_t ppn)
 }
 
 extern char bootstack[], bootstacktop[];
+extern pde_t *boot_pgdir_va;
+extern uintptr_t boot_pgdir_pa;
 
 #endif /* !__KERN_MM_PMM_H__ */

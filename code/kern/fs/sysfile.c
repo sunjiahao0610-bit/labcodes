@@ -13,18 +13,21 @@
 #include <error.h>
 #include <assert.h>
 
-#define IOBUF_SIZE                          4096
+#define IOBUF_SIZE 4096
 
 /* copy_path - copy path name */
 static int
-copy_path(char **to, const char *from) {
+copy_path(char **to, const char *from)
+{
     struct mm_struct *mm = current->mm;
     char *buffer;
-    if ((buffer = kmalloc(FS_MAX_FPATH_LEN + 1)) == NULL) {
+    if ((buffer = kmalloc(FS_MAX_FPATH_LEN + 1)) == NULL)
+    {
         return -E_NO_MEM;
     }
     lock_mm(mm);
-    if (!copy_string(mm, buffer, from, FS_MAX_FPATH_LEN + 1)) {
+    if (!copy_string(mm, buffer, from, FS_MAX_FPATH_LEN + 1))
+    {
         unlock_mm(mm);
         goto failed_cleanup;
     }
@@ -38,11 +41,12 @@ failed_cleanup:
 }
 
 /* sysfile_open - open file */
-int
-sysfile_open(const char *__path, uint32_t open_flags) {
+int sysfile_open(const char *__path, uint32_t open_flags)
+{
     int ret;
     char *path;
-    if ((ret = copy_path(&path, __path)) != 0) {
+    if ((ret = copy_path(&path, __path)) != 0)
+    {
         return ret;
     }
     ret = file_open(path, open_flags);
@@ -51,126 +55,148 @@ sysfile_open(const char *__path, uint32_t open_flags) {
 }
 
 /* sysfile_close - close file */
-int
-sysfile_close(int fd) {
+int sysfile_close(int fd)
+{
     return file_close(fd);
 }
 
 /* sysfile_read - read file */
-int
-sysfile_read(int fd, void *base, size_t len) {
+int sysfile_read(int fd, void *base, size_t len)
+{
     struct mm_struct *mm = current->mm;
-    if (len == 0) {
+    if (len == 0)
+    {
         return 0;
     }
-    if (!file_testfd(fd, 1, 0)) {
+    if (!file_testfd(fd, 1, 0))
+    {
         return -E_INVAL;
     }
     void *buffer;
-    if ((buffer = kmalloc(IOBUF_SIZE)) == NULL) {
+    if ((buffer = kmalloc(IOBUF_SIZE)) == NULL)
+    {
         return -E_NO_MEM;
     }
 
     int ret = 0;
     size_t copied = 0, alen;
-    while (len != 0) {
-        if ((alen = IOBUF_SIZE) > len) {
+    while (len != 0)
+    {
+        if ((alen = IOBUF_SIZE) > len)
+        {
             alen = len;
         }
         ret = file_read(fd, buffer, alen, &alen);
-        if (alen != 0) {
+        if (alen != 0)
+        {
             lock_mm(mm);
             {
-                if (copy_to_user(mm, base, buffer, alen)) {
+                if (copy_to_user(mm, base, buffer, alen))
+                {
                     assert(len >= alen);
                     base += alen, len -= alen, copied += alen;
                 }
-                else if (ret == 0) {
+                else if (ret == 0)
+                {
                     ret = -E_INVAL;
                 }
             }
             unlock_mm(mm);
         }
-        if (ret != 0 || alen == 0) {
+        if (ret != 0 || alen == 0)
+        {
             goto out;
         }
     }
 
 out:
     kfree(buffer);
-    if (copied != 0) {
+    if (copied != 0)
+    {
         return copied;
     }
     return ret;
 }
 
 /* sysfile_write - write file */
-int
-sysfile_write(int fd, void *base, size_t len) {
+int sysfile_write(int fd, void *base, size_t len)
+{
     struct mm_struct *mm = current->mm;
-    if (len == 0) {
+    if (len == 0)
+    {
         return 0;
     }
-    if (!file_testfd(fd, 0, 1)) {
+    if (!file_testfd(fd, 0, 1))
+    {
         return -E_INVAL;
     }
     void *buffer;
-    if ((buffer = kmalloc(IOBUF_SIZE)) == NULL) {
+    if ((buffer = kmalloc(IOBUF_SIZE)) == NULL)
+    {
         return -E_NO_MEM;
     }
 
     int ret = 0;
     size_t copied = 0, alen;
-    while (len != 0) {
-        if ((alen = IOBUF_SIZE) > len) {
+    while (len != 0)
+    {
+        if ((alen = IOBUF_SIZE) > len)
+        {
             alen = len;
         }
         lock_mm(mm);
         {
-            if (!copy_from_user(mm, buffer, base, alen, 0)) {
+            if (!copy_from_user(mm, buffer, base, alen, 0))
+            {
                 ret = -E_INVAL;
             }
         }
         unlock_mm(mm);
-        if (ret == 0) {
+        if (ret == 0)
+        {
             ret = file_write(fd, buffer, alen, &alen);
-            if (alen != 0) {
+            if (alen != 0)
+            {
                 assert(len >= alen);
                 base += alen, len -= alen, copied += alen;
             }
         }
-        if (ret != 0 || alen == 0) {
+        if (ret != 0 || alen == 0)
+        {
             goto out;
         }
     }
 
 out:
     kfree(buffer);
-    if (copied != 0) {
+    if (copied != 0)
+    {
         return copied;
     }
     return ret;
 }
 
 /* sysfile_seek - seek file */
-int
-sysfile_seek(int fd, off_t pos, int whence) {
+int sysfile_seek(int fd, off_t pos, int whence)
+{
     return file_seek(fd, pos, whence);
 }
 
 /* sysfile_fstat - stat file */
-int
-sysfile_fstat(int fd, struct stat *__stat) {
+int sysfile_fstat(int fd, struct stat *__stat)
+{
     struct mm_struct *mm = current->mm;
     int ret;
     struct stat __local_stat, *stat = &__local_stat;
-    if ((ret = file_fstat(fd, stat)) != 0) {
+    if ((ret = file_fstat(fd, stat)) != 0)
+    {
         return ret;
     }
 
     lock_mm(mm);
     {
-        if (!copy_to_user(mm, __stat, stat, sizeof(struct stat))) {
+        if (!copy_to_user(mm, __stat, stat, sizeof(struct stat)))
+        {
             ret = -E_INVAL;
         }
     }
@@ -179,17 +205,18 @@ sysfile_fstat(int fd, struct stat *__stat) {
 }
 
 /* sysfile_fsync - sync file */
-int
-sysfile_fsync(int fd) {
+int sysfile_fsync(int fd)
+{
     return file_fsync(fd);
 }
 
 /* sysfile_chdir - change dir */
-int
-sysfile_chdir(const char *__path) {
+int sysfile_chdir(const char *__path)
+{
     int ret;
     char *path;
-    if ((ret = copy_path(&path, __path)) != 0) {
+    if ((ret = copy_path(&path, __path)) != 0)
+    {
         return ret;
     }
     ret = vfs_chdir(path);
@@ -198,14 +225,16 @@ sysfile_chdir(const char *__path) {
 }
 
 /* sysfile_link - link file */
-int
-sysfile_link(const char *__path1, const char *__path2) {
+int sysfile_link(const char *__path1, const char *__path2)
+{
     int ret;
     char *old_path, *new_path;
-    if ((ret = copy_path(&old_path, __path1)) != 0) {
+    if ((ret = copy_path(&old_path, __path1)) != 0)
+    {
         return ret;
     }
-    if ((ret = copy_path(&new_path, __path2)) != 0) {
+    if ((ret = copy_path(&new_path, __path2)) != 0)
+    {
         kfree(old_path);
         return ret;
     }
@@ -215,14 +244,16 @@ sysfile_link(const char *__path1, const char *__path2) {
 }
 
 /* sysfile_rename - rename file */
-int
-sysfile_rename(const char *__path1, const char *__path2) {
+int sysfile_rename(const char *__path1, const char *__path2)
+{
     int ret;
     char *old_path, *new_path;
-    if ((ret = copy_path(&old_path, __path1)) != 0) {
+    if ((ret = copy_path(&old_path, __path1)) != 0)
+    {
         return ret;
     }
-    if ((ret = copy_path(&new_path, __path2)) != 0) {
+    if ((ret = copy_path(&new_path, __path2)) != 0)
+    {
         kfree(old_path);
         return ret;
     }
@@ -232,11 +263,12 @@ sysfile_rename(const char *__path1, const char *__path2) {
 }
 
 /* sysfile_unlink - unlink file */
-int
-sysfile_unlink(const char *__path) {
+int sysfile_unlink(const char *__path)
+{
     int ret;
     char *path;
-    if ((ret = copy_path(&path, __path)) != 0) {
+    if ((ret = copy_path(&path, __path)) != 0)
+    {
         return ret;
     }
     ret = vfs_unlink(path);
@@ -245,17 +277,19 @@ sysfile_unlink(const char *__path) {
 }
 
 /* sysfile_get cwd - get current working directory */
-int
-sysfile_getcwd(char *buf, size_t len) {
+int sysfile_getcwd(char *buf, size_t len)
+{
     struct mm_struct *mm = current->mm;
-    if (len == 0) {
+    if (len == 0)
+    {
         return -E_INVAL;
     }
 
     int ret = -E_INVAL;
     lock_mm(mm);
     {
-        if (user_mem_check(mm, (uintptr_t)buf, len, 1)) {
+        if (user_mem_check(mm, (uintptr_t)buf, len, 1))
+        {
             struct iobuf __iob, *iob = iobuf_init(&__iob, buf, len, 0);
             ret = vfs_getcwd(iob);
         }
@@ -265,30 +299,34 @@ sysfile_getcwd(char *buf, size_t len) {
 }
 
 /* sysfile_getdirentry - get the file entry in DIR */
-int
-sysfile_getdirentry(int fd, struct dirent *__direntp) {
+int sysfile_getdirentry(int fd, struct dirent *__direntp)
+{
     struct mm_struct *mm = current->mm;
     struct dirent *direntp;
-    if ((direntp = kmalloc(sizeof(struct dirent))) == NULL) {
+    if ((direntp = kmalloc(sizeof(struct dirent))) == NULL)
+    {
         return -E_NO_MEM;
     }
 
     int ret = 0;
     lock_mm(mm);
     {
-        if (!copy_from_user(mm, &(direntp->offset), &(__direntp->offset), sizeof(direntp->offset), 1)) {
+        if (!copy_from_user(mm, &(direntp->offset), &(__direntp->offset), sizeof(direntp->offset), 1))
+        {
             ret = -E_INVAL;
         }
     }
     unlock_mm(mm);
 
-    if (ret != 0 || (ret = file_getdirentry(fd, direntp)) != 0) {
+    if (ret != 0 || (ret = file_getdirentry(fd, direntp)) != 0)
+    {
         goto out;
     }
 
     lock_mm(mm);
     {
-        if (!copy_to_user(mm, __direntp, direntp, sizeof(struct dirent))) {
+        if (!copy_to_user(mm, __direntp, direntp, sizeof(struct dirent)))
+        {
             ret = -E_INVAL;
         }
     }
@@ -300,18 +338,70 @@ out:
 }
 
 /* sysfile_dup -  duplicate fd1 to fd2 */
-int
-sysfile_dup(int fd1, int fd2) {
+int sysfile_dup(int fd1, int fd2)
+{
     return file_dup(fd1, fd2);
 }
 
-int
-sysfile_pipe(int *fd_store) {
+int sysfile_pipe(int *fd_store)
+{
     return -E_UNIMP;
 }
 
-int
-sysfile_mkfifo(const char *__name, uint32_t open_flags) {
+int sysfile_mkfifo(const char *__name, uint32_t open_flags)
+{
     return -E_UNIMP;
 }
 
+/* sysfile_mmap - memory map file */
+uintptr_t
+sysfile_mmap(uintptr_t addr, size_t len, int prot, int flags, int fd, off_t offset)
+{
+    struct mm_struct *mm = current->mm;
+    if (len == 0)
+    {
+        return -E_INVAL;
+    }
+
+    uint32_t vm_flags = 0;
+    if (prot & PROT_READ)
+        vm_flags |= VM_READ;
+    if (prot & PROT_WRITE)
+        vm_flags |= VM_WRITE;
+    if (prot & PROT_EXEC)
+        vm_flags |= VM_EXEC;
+
+    struct file *file = NULL;
+    if (!(flags & MAP_ANONYMOUS))
+    {
+        if (!file_testfd(fd, 1, (prot & PROT_WRITE) ? 1 : 0))
+        {
+            return -E_INVAL;
+        }
+        file = fd2file_struct(fd);
+        if (file == NULL)
+        {
+            return -E_INVAL;
+        }
+    }
+
+    lock_mm(mm);
+    uintptr_t ret = do_mmap(mm, addr, len, vm_flags, file, offset);
+    unlock_mm(mm);
+    return ret;
+}
+
+/* sysfile_munmap - unmap memory */
+int sysfile_munmap(uintptr_t addr, size_t len)
+{
+    struct mm_struct *mm = current->mm;
+    if (len == 0)
+    {
+        return -E_INVAL;
+    }
+
+    lock_mm(mm);
+    int ret = do_munmap(mm, addr, len);
+    unlock_mm(mm);
+    return ret;
+}

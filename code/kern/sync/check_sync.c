@@ -130,39 +130,6 @@ int philosopher_using_semaphore(void * arg) /* i：哲学家号码，从0到N-1 
 }
 
 //-----------------philosopher problem using monitor ------------
-/*PSEUDO CODE :philosopher problem using monitor
- * monitor dp
- * {
- *  enum {thinking, hungry, eating} state[5];
- *  condition self[5];
- *
- *  void pickup(int i) {
- *      state[i] = hungry;
- *      if ((state[(i+4)%5] != eating) && (state[(i+1)%5] != eating)) {
- *        state[i] = eating;
- *      else
- *         self[i].wait();
- *   }
- *
- *   void putdown(int i) {
- *      state[i] = thinking;
- *      if ((state[(i+4)%5] == hungry) && (state[(i+3)%5] != eating)) {
- *          state[(i+4)%5] = eating;
- *          self[(i+4)%5].signal();
- *      }
- *      if ((state[(i+1)%5] == hungry) && (state[(i+2)%5] != eating)) {
- *          state[(i+1)%5] = eating;
- *          self[(i+1)%5].signal();
- *      }
- *   }
- *
- *   void init() {
- *      for (int i = 0; i < 5; i++)
- *         state[i] = thinking;
- *   }
- * }
- */
-
 struct proc_struct *philosopher_proc_condvar[N]; // N philosopher
 int state_condvar[N];                            // the philosopher's state: EATING, HUNGARY, THINKING  
 monitor_t mt, *mtp=&mt;                          // monitor

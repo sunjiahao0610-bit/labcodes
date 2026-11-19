@@ -17,7 +17,9 @@ int dup2(int fd1, int fd2);
 int pipe(int *fd_store);
 int mkfifo(const char *name, uint32_t open_flags);
 
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
+int munmap(void *addr, size_t len);
+
 void print_stat(const char *name, int fd, struct stat *stat);
 
 #endif /* !__USER_LIBS_FILE_H__ */
-

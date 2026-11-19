@@ -148,5 +148,3 @@ uint64_t get_memory_base(void) {
 uint64_t get_memory_size(void) {
     return memory_size;
 }
-
-

@@ -108,23 +108,9 @@ alloc_proc(void)
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
 
-        // LAB5:填写你在lab5中实现的代码 (update LAB4 steps)已填写
-        /*
-         * below fields(add in LAB5) in proc_struct need to be initialized
-         *       uint32_t wait_state;                        // waiting state
-         *       struct proc_struct *cptr, *yptr, *optr;     // relations between processes
-         */
+// LAB5:填写你在lab5中实现的代码
 
-        // LAB6:填写你在lab6中实现的代码 (update LAB5 steps)已填写
-        /*
-         * below fields(add in LAB6) in proc_struct need to be initialized
-         *       struct run_queue *rq;                       // run queue contains Process
-         *       list_entry_t run_link;                      // the entry linked in run queue
-         *       int time_slice;                             // time slice for occupying the CPU
-         *       skew_heap_entry_t lab6_run_pool;            // entry in the run pool (lab6 stride)
-         *       uint32_t lab6_stride;                       // stride value (lab6 stride)
-         *       uint32_t lab6_priority;                     // priority value (lab6 stride)
-         */
+// LAB6:填写你在lab6中实现的代码
 
         //LAB8 YOUR CODE : (update LAB6 steps)
         /*

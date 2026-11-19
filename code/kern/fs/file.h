@@ -41,6 +41,9 @@ int file_dup(int fd1, int fd2);
 int file_pipe(int fd[]);
 int file_mkfifo(const char *name, uint32_t open_flags);
 
+// get file struct from fd - for mmap use
+struct file *fd2file_struct(int fd);
+
 static inline int
 fopen_count(struct file *file) {
     return file->open_count;
@@ -59,4 +62,3 @@ fopen_count_dec(struct file *file) {
 }
 
 #endif /* !__KERN_FS_FILE_H__ */
-

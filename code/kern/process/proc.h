@@ -53,7 +53,7 @@ struct proc_struct
     struct mm_struct *mm;                   // Process's memory management field
     struct context context;                 // Switch here to run process
     struct trapframe *tf;                   // Trap frame for current interrupt
-    uintptr_t pgdir;                        // the base addr of Page Directroy Table(PDT)
+    uintptr_t pgdir;                        // Page Directory Table Addr (Physical)
     uint32_t flags;                         // Process flag
     char name[PROC_NAME_LEN + 1];           // Process name
     list_entry_t list_link;                 // Process link list

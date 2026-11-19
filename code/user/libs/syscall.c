@@ -6,38 +6,41 @@
 #include <dirent.h>
 
 
-#define MAX_ARGS            5
+#define MAX_ARGS            6
 
 static inline int
 syscall(uint64_t num, ...) {
     va_list ap;
     va_start(ap, num);
     uint64_t a[MAX_ARGS];
-    int i, ret;
+    int i;
+    uint64_t ret;
     for (i = 0; i < MAX_ARGS; i ++) {
         a[i] = va_arg(ap, uint64_t);
     }
     va_end(ap);
 
     asm volatile (
-        "lw a0, %1\n"
-        "lw a1, %2\n"
-        "lw a2, %3\n"
-        "lw a3, %4\n"
-        "lw a4, %5\n"
-        "lw a5, %6\n"
+        "ld a0, %1\n"
+        "ld a1, %2\n"
+        "ld a2, %3\n"
+        "ld a3, %4\n"
+        "ld a4, %5\n"
+        "ld a5, %6\n"
+        "ld a6, %7\n"
         "ecall\n"
-        "sw a0, %0"
+        "sd a0, %0"
         : "=m" (ret)
         : "m" (num),
           "m" (a[0]),
           "m" (a[1]),
           "m" (a[2]),
           "m" (a[3]),
-          "m" (a[4])
+          "m" (a[4]),
+          "m" (a[5])
         : "memory"
       );
-    return ret;
+    return (int)ret;
 }
 
 int
@@ -149,4 +152,14 @@ sys_getdirentry(int64_t fd, struct dirent *dirent) {
 int
 sys_dup(int64_t fd1, int64_t fd2) {
     return syscall(SYS_dup, fd1, fd2);
+}
+
+int
+sys_mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
+    return syscall(SYS_mmap, addr, len, prot, flags, fd, offset);
+}
+
+int
+sys_munmap(void *addr, size_t len) {
+    return syscall(SYS_munmap, addr, len);
 }

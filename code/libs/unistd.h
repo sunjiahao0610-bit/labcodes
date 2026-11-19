@@ -64,5 +64,20 @@
 #define EXEC_MAX_ARG_NUM    32
 #define EXEC_MAX_ARG_LEN    4095
 
-#endif /* !__LIBS_UNISTD_H__ */
+/* mmap protection flags */
+#define PROT_NONE           0x0         // page can not be accessed
+#define PROT_READ           0x1         // page can be read
+#define PROT_WRITE          0x2         // page can be written
+#define PROT_EXEC           0x4         // page can be executed
 
+/* mmap flags */
+#define MAP_SHARED          0x01        // share changes
+#define MAP_PRIVATE         0x02        // changes are private
+#define MAP_FIXED           0x10        // interpret addr exactly
+#define MAP_ANONYMOUS       0x20        // don't use a file
+#define MAP_ANON            MAP_ANONYMOUS
+
+/* mmap error return */
+#define MAP_FAILED          ((void *)-1)
+
+#endif /* !__LIBS_UNISTD_H__ */

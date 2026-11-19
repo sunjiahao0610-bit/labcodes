@@ -27,7 +27,8 @@ int sys_getcwd(char *buffer, size_t len);
 int sys_getdirentry(int64_t fd, struct dirent *dirent);
 int sys_dup(int64_t fd1, int64_t fd2);
 void sys_lab6_set_priority(uint64_t priority); //only for lab6
+int sys_mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset);
+int sys_munmap(void *addr, size_t len);
 
 
 #endif /* !__USER_LIBS_SYSCALL_H__ */
-

@@ -6,7 +6,11 @@
 #include <error.h>
 #include <pmm.h>
 #include <riscv.h>
+#include <swap.h>
 #include <kmalloc.h>
+#include <file.h>
+#include <iobuf.h>
+#include <unistd.h>
 
 /*
   vmm design include two parts: mm_struct (mm) & vma_struct (vma)
@@ -36,6 +40,7 @@
 
 static void check_vmm(void);
 static void check_vma_struct(void);
+static void check_pgfault(void);
 
 // mm_create -  alloc a mm_struct & initialize it.
 struct mm_struct *
@@ -50,7 +55,10 @@ mm_create(void)
         mm->pgdir = NULL;
         mm->map_count = 0;
 
-        mm->sm_priv = NULL;
+        if (swap_init_ok)
+            swap_init_mm(mm);
+        else
+            mm->sm_priv = NULL;
 
         set_mm_count(mm, 0);
         sem_init(&(mm->mm_sem), 1);
@@ -69,6 +77,8 @@ vma_create(uintptr_t vm_start, uintptr_t vm_end, uint32_t vm_flags)
         vma->vm_start = vm_start;
         vma->vm_end = vm_end;
         vma->vm_flags = vm_flags;
+        vma->vm_file = NULL; // 初始化文件映射指针
+        vma->vm_pgoff = 0;   // 初始化页偏移
     }
     return vma;
 }
@@ -278,7 +288,7 @@ check_vmm(void)
     // size_t nr_free_pages_store = nr_free_pages();
 
     check_vma_struct();
-    // check_pgfault();
+    check_pgfault();
 
     cprintf("check_vmm() succeeded.\n");
 }
@@ -349,6 +359,240 @@ check_vma_struct(void)
 
     cprintf("check_vma_struct() succeeded!\n");
 }
+
+struct mm_struct *check_mm_struct;
+
+// check_pgfault - check correctness of pgfault handler
+static void
+check_pgfault(void)
+{
+    size_t nr_free_pages_store = nr_free_pages();
+
+    check_mm_struct = mm_create();
+    assert(check_mm_struct != NULL);
+
+    struct mm_struct *mm = check_mm_struct;
+    pde_t *pgdir = mm->pgdir = boot_pgdir_va;
+    assert(pgdir[0] == 0);
+
+    struct vma_struct *vma = vma_create(0, PTSIZE, VM_WRITE);
+    assert(vma != NULL);
+
+    insert_vma_struct(mm, vma);
+
+    uintptr_t addr = 0x100;
+    assert(find_vma(mm, addr) == vma);
+
+    int i, sum = 0;
+
+    for (i = 0; i < 100; i++)
+    {
+        *(char *)(addr + i) = i;
+        sum += i;
+    }
+    for (i = 0; i < 100; i++)
+    {
+        sum -= *(char *)(addr + i);
+    }
+
+    assert(sum == 0);
+
+    pde_t *pd1 = pgdir, *pd0 = page2kva(pde2page(pgdir[0]));
+    page_remove(pgdir, ROUNDDOWN(addr, PGSIZE));
+    free_page(pde2page(pd0[0]));
+    free_page(pde2page(pd1[0]));
+    pgdir[0] = 0;
+    flush_tlb();
+
+    mm->pgdir = NULL;
+    mm_destroy(mm);
+    check_mm_struct = NULL;
+
+    assert(nr_free_pages_store == nr_free_pages());
+
+    cprintf("check_pgfault() succeeded!\n");
+}
+// page fault number
+volatile unsigned int pgfault_num = 0;
+
+// /* do_pgfault - interrupt handler to process the page fault execption
+//  * @mm         : the control struct for a set of vma using the same PDT
+//  * @error_code : the error code recorded in trapframe->tf_err which is setted by x86 hardware
+//  * @addr       : the addr which causes a memory access exception, (the contents of the CR2 register)
+//  *
+//  * CALL GRAPH: trap--> trap_dispatch-->pgfault_handler-->do_pgfault
+//  * The processor provides ucore's do_pgfault function with two items of information to aid in diagnosing
+//  * the exception and recovering from it.
+//  *   (1) The contents of the CR2 register. The processor loads the CR2 register with the
+//  *       32-bit linear address that generated the exception. The do_pgfault fun can
+//  *       use this address to locate the corresponding page directory and page-table
+//  *       entries.
+//  *   (2) An error code on the kernel stack. The error code for a page fault has a format different from
+//  *       that for other exceptions. The error code tells the exception handler three things:
+//  *         -- The P flag   (bit 0) indicates whether the exception was due to a not-present page (0)
+//  *            or to either an access rights violation or the use of a reserved bit (1).
+//  *         -- The W/R flag (bit 1) indicates whether the memory access that caused the exception
+//  *            was a read (0) or write (1).
+//  *         -- The U/S flag (bit 2) indicates whether the processor was executing at user mode (1)
+//  *            or supervisor mode (0) at the time of the exception.
+//  */
+
+int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr)
+{
+    int ret = -E_INVAL;
+    struct vma_struct *vma = find_vma(mm, addr);
+
+    pgfault_num++;
+
+    // 1. 地址合法性检查
+    if (vma == NULL || vma->vm_start > addr)
+    {
+        cprintf("not valid addr %x, and can not find it in vma\n", addr);
+        return -E_INVAL;
+    }
+
+    // 2. 写权限检查（仅对写操作检查）
+    // RISC-V: cause == 15 (CAUSE_STORE_PAGE_FAULT) 表示写操作
+    bool is_write = (error_code == 15);
+    if (is_write && !(vma->vm_flags & VM_WRITE))
+    {
+        cprintf("do_pgfault: write to non-writable vma\n");
+        return -E_INVAL;
+    }
+
+    // 3. 设置页权限
+    // RISC-V 要求：必须设置 PTE_R 才能访问页面
+    uint32_t perm = PTE_U | PTE_R; // 用户可访问 + 可读
+    if (vma->vm_flags & VM_WRITE)
+    {
+        perm |= PTE_W;
+    }
+
+    addr = ROUNDDOWN(addr, PGSIZE);
+
+    // 4. 获取 PTE（必要时创建页表）
+    pte_t *ptep = get_pte(mm->pgdir, addr, 1);
+    if (ptep == NULL)
+    {
+        cprintf("get_pte in do_pgfault failed\n");
+        return -E_NO_MEM;
+    }
+
+    /*
+     * =================================================
+     * 5. mmap 文件映射缺页处理
+     *    模仿 Linux 的处理方式：
+     *    - 文件映射的页面在缺页时从文件读取
+     *    - 使用 file_seek + file_read 来读取指定偏移的数据
+     * =================================================
+     */
+    if (vma->vm_file != NULL)
+    {
+        // 文件映射：只处理"页尚未建立"的情况
+        if (*ptep == 0)
+        {
+            // 分配物理页
+            struct Page *page = pgdir_alloc_page(mm->pgdir, addr, perm);
+            if (page == NULL)
+            {
+                cprintf("pgdir_alloc_page in mmap pgfault failed\n");
+                return -E_NO_MEM;
+            }
+
+            void *kva = page2kva(page);
+            // 先清零，防止文件末尾不足一页时有脏数据
+            memset(kva, 0, PGSIZE);
+
+            // 计算文件偏移
+            // vm_pgoff 是映射起始的页偏移，加上当前页相对于映射起始的偏移
+            size_t page_index = (addr - vma->vm_start) / PGSIZE;
+            off_t file_offset = (vma->vm_pgoff + page_index) * PGSIZE;
+
+            // 先 seek 到正确位置，再读取
+            struct file *file = vma->vm_file;
+            int fd = file->fd;
+            off_t saved_pos = file->pos; // 保存当前游标
+
+            ret = file_seek(fd, file_offset, LSEEK_SET);
+            if (ret != 0)
+            {
+                cprintf("file_seek in mmap pgfault failed: %e\n", ret);
+                // 即使 seek 失败，页面已分配，返回成功让进程继续
+                // 页面内容为零
+                return 0;
+            }
+
+            size_t read_size = 0;
+            ret = file_read(fd, kva, PGSIZE, &read_size);
+
+            // 恢复文件游标
+            file_seek(fd, saved_pos, LSEEK_SET);
+
+            if (ret != 0 && ret != -E_EOF)
+            {
+                cprintf("file_read in mmap pgfault failed: %e\n", ret);
+                // 读取失败，但页面已分配，返回成功
+                return 0;
+            }
+            // 读取成功（可能读取了 0 到 PGSIZE 字节）
+        }
+        // 如果 *ptep != 0，说明页面已存在，直接返回成功
+        return 0;
+    }
+
+    /*
+     * ==================================
+     * 6. 匿名页 / swap 缺页处理
+     * ==================================
+     */
+    if (*ptep == 0)
+    {
+        // 匿名页：分配新页并清零
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL)
+        {
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            return -E_NO_MEM;
+        }
+    }
+    else
+    {
+        // PTE不为0，可能是swap条目或者是已存在的页面
+      if (swap_init_ok)
+            {
+            // swap 页：从交换区换入
+            struct Page *page = NULL;
+            if ((ret = swap_in(mm, addr, &page)) != 0)
+            {
+                cprintf("swap_in in do_pgfault failed\n");
+                return ret;
+            }
+            page_insert(mm->pgdir, page, addr, perm);
+            swap_map_swappable(mm, addr, page, 1);
+            page->pra_vaddr = addr;
+            }
+        else
+        {
+            // swap未初始化，但PTE不为0
+            // 检查是否是有效页面（PTE_V位）
+            if (*ptep & PTE_V)
+            {
+                // 页面已经存在，可能是权限问题，直接返回成功
+                return 0;
+            }
+            // 不是有效页面，可能是残留的swap条目或无效数据
+            // 清除PTE并分配新页面
+            *ptep = 0;
+            if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL)
+            {
+                cprintf("pgdir_alloc_page in do_pgfault failed (swap not ready)\n");
+                return -E_NO_MEM;
+            }
+        }
+    }
+
+    return 0;
+}
+
 bool user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write)
 {
     if (mm != NULL)
@@ -410,4 +654,33 @@ bool copy_string(struct mm_struct *mm, char *dst, const char *src,
         dst += part, src += part, maxn -= part;
         part = PGSIZE;
     }
+}
+
+/*
+ * find_free_area - 在VMA列表中查找足够大的空闲区域
+ * @mm: 内存管理结构
+ * @len: 需要的长度（已对齐到页）
+ * @start_hint: 搜索起始地址提示
+ *
+ * 策略：First-Fit算法
+ * 1. 从start_hint开始，在VMA之间的空隙中查找
+ * 2. 如果找不到，从用户空间起始位置重新查找
+ * 3. 返回找到的地址，失败返回0
+ */
+
+//lab9 function2 YOUR CODE
+uintptr_t
+do_mmap(struct mm_struct *mm, uintptr_t addr, size_t len, uint32_t vm_flags,
+        struct file *file, off_t offset)
+{
+    /* lab9 TODO: 实现内存映射；当前为空实现，保证骨架可编译。 */
+    return 0;
+}
+
+//lab9 function3 YOUR CODE
+int
+do_munmap(struct mm_struct *mm, uintptr_t addr, size_t len)
+{
+    /* lab9 TODO: 实现解除映射；当前为空实现，保证骨架可编译。 */
+    return -E_INVAL;
 }

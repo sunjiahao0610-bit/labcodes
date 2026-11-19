@@ -3,7 +3,6 @@
 #include <proc.h>
 #include <assert.h>
 #include <default_sched.h>
-#include <stdio.h>
 
 #define USE_SKEW_HEAP 1
 

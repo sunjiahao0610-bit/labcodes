@@ -66,3 +66,16 @@ print_stat(const char *name, int fd, struct stat *stat) {
     cprintf("    size    : %lu\n", stat->st_size);
 }
 
+void *
+mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
+    int ret = sys_mmap(addr, len, prot, flags, fd, offset);
+    if (ret < 0) {
+        return MAP_FAILED;
+    }
+    return (void *)(uintptr_t)ret;
+}
+
+int
+munmap(void *addr, size_t len) {
+    return sys_munmap(addr, len);
+}

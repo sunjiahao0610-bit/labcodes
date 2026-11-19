@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.17)
-project(lab8 C)
+project(lab9 C)
 
 set(CMAKE_C_STANDARD 11)
 
@@ -25,7 +25,7 @@ include_directories(tools)
 include_directories(user)
 include_directories(user/libs)
 
-add_executable(lab8
+add_executable(lab9
         kern/debug/assert.h
         kern/debug/kdebug.c
         kern/debug/kdebug.h

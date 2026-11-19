@@ -349,4 +349,12 @@ file_dup(int fd1, int fd2) {
     return file2->fd;
 }
 
-
+// get file struct from fd - for mmap use
+struct file *
+fd2file_struct(int fd) {
+    struct file *file;
+    if (fd2file(fd, &file) != 0) {
+        return NULL;
+    }
+    return file;
+}

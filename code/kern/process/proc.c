@@ -119,6 +119,8 @@ alloc_proc(void)
         memset(proc->name, 0, sizeof(proc->name));
         list_init(&proc->list_link);
         list_init(&proc->hash_link);
+        proc->wait_state = 0;
+        proc->cptr = proc->optr = proc->yptr = NULL;
 
         // LAB5 YOUR CODE : (update LAB4 steps)
         /*
@@ -470,6 +472,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
         goto fork_out;
     }
     proc->parent = current;
+    current->wait_state = 0;
 
     if ((ret = setup_kstack(proc)) != 0)
     {
@@ -486,8 +489,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     {
         proc->pid = get_pid();
         hash_proc(proc);
-        list_add(&proc_list, &proc->list_link);
-        nr_process++;
+        set_links(proc);
     }
     local_intr_restore(intr_flag);
 
@@ -728,6 +730,9 @@ load_icode(unsigned char *binary, size_t size)
      *          tf->status should be appropriate for user program (the value of sstatus)
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
+    tf->gpr.sp = USTACKTOP;
+    tf->epc = elf->e_entry;
+    tf->status = (sstatus & ~SSTATUS_SPP) | SSTATUS_SPIE;
 
     ret = 0;
 out:

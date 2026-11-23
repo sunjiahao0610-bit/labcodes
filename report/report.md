@@ -32,7 +32,7 @@
 |------|------------|---------|------|
 | 2513628-乐嘉文 | DeepSeek Harness | DeepSeek-V4.1-Flash | |
 | 2511676-孙家昊 | Codex | GPT6.1-sol | |
-| 2510777-朱万旭 | Codex| GPT6.2-astra | |
+| 2510777-朱万旭 | Deepseek Harness| Deepsee-V4.1-Flash | |
 
 **说明：**
 - **AI 编程工具**：指具体使用的终端工具、编辑器插件、桌面应用或浏览器界面
@@ -65,11 +65,59 @@
 
 **负责人：** 2510777-朱万旭
 
+
+#### 模块功能描述
+
+用户程序通过 `ecall`把请求号和参数放入约定寄存器，`exception_handler` 识别出 `CAUSE_USER_ECALL` 后交给 `syscall`；`syscall` 从当前 `trapframe` 中取出调用号和参数并分发到各 sys_*，由它们完成进程管理、程序替换、等待回收、让出 CPU 等内核语义，最后把结果写回用户寄存器，经异常返回路径回到用户态。最终实现用户态系统调用功能。
+
+**需要实现/修改的函数**
+
+```c
+kern/syscall/syscall.c
+void syscall(void)
+static int sys_exit(uint64_t arg[])
+static int sys_fork(uint64_t arg[])
+static int sys_wait(uint64_t arg[])
+static int sys_exec(uint64_t arg[])
+static int sys_yield(uint64_t arg[]) 
+static int sys_kill(uint64_t arg[]) 
+static int sys_getpid(uint64_t arg[]) 
+static int sys_putc(uint64_t arg[])
+static int sys_pgdir(uint64_t arg[])
+
+kern/trap/trap.c
+void exception_handler(struct trapframe *tf)
+```
+
+#### 最终提示词
+本模块最终使用的提示词请见[模块一最终提示词.md](模块一最终提示词.md)
 ---
 
 ### 功能模块二：创建加载第一个用户进程功能
 
 **负责人：** 2510777-朱万旭
+
+#### 模块功能描述
+
+本模块实现把系统从内核线程推进到第一个用户程序：`init_main` 创建 `user_main` 并等待其退出，`user_main` 通过 `kernel_execve` 把自身从内核线程转成用户进程；`kernel_execve` 经 ebreak 进入 trap 返回路径，之后由 `do_execve` 回收旧地址空间、`load_icode` 装载 ELF、建立用户页表和栈并配置 trapframe，最后由 sret 回到 U 模式，并由`do_wait` 进行回收。
+
+
+**需要实现/修改的函数**
+
+```c
+kern/process/proc.c
+static int init_main(void *arg)  
+static struct proc_struct *alloc_proc(void)  
+int kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags)
+int do_wait(int pid, int *code_store)  
+static int user_main(void *arg)  
+static int kernel_execve(const char *name, unsigned char *binary, size_t size)  
+int do_execve(const char *name, size_t len, unsigned char *binary, size_t size)
+static int load_icode(unsigned char *binary, size_t size)
+```
+
+#### 最终提示词
+本模块最终使用的提示词请见[模块二最终提示词.md](模块二最终提示词.md)
 
 ---
 

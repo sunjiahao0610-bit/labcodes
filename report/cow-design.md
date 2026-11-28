@@ -19,32 +19,6 @@
 ## 页级状态机
 
 模型观察某个地址空间中的一个用户虚拟页。`ref` 是该条目当前指向的物理页的引用数。解除共享后，写入方和保留原页的一方各自按照自己的 PTE 与引用数判断状态。
-
-```mermaid
-stateDiagram-v2
-    state "未映射 U" as U
-    state "真正只读 R" as R
-    state "私有可写 W" as W
-    state "共享 COW S" as S
-    state "独占 COW E" as E
-
-    [*] --> U
-    U --> R: 加载只读段
-    U --> W: 加载可写段或栈
-    R --> R: fork 或读取
-    W --> W: 直接写入
-    W --> S: fork 共享物理页
-    S --> S: 读取或再次 fork
-    S --> W: 写入方复制物理页
-    S --> E: 其余引用全部释放
-    E --> W: 写入方就地恢复写权限
-    E --> S: 再次 fork
-    R --> U: 删除映射
-    W --> U: 删除映射
-    S --> U: 删除本地址空间的映射
-    E --> U: 删除最后一个映射
-```
-
 | 状态 | 当前 PTE | 写入处理 |
 | --- | --- | --- |
 | U 未映射 | 缺少 PTE 或 `V=0` | 用户写触发 `-E_FAULT`，内核回写返回失败。 |
@@ -63,7 +37,7 @@ stateDiagram-v2
 
 对于私有文件映射，写时复制应将修改限制在进程的私有页内。旧版 Linux 在处理一次写时复制后，清除了后续页面查找使用的 `FOLL_WRITE` 标志。此时调用方仍将执行写入，但重试路径已不再按写入要求选择目标页。如果私有页的映射在重试前被撤销，同一虚拟地址可能重新指向文件页缓存中的原始页。内核写入该页便会破坏私有映射应提供的写入隔离。
 
-Linux 4.8.3 所含修复保留 `FOLL_WRITE` 以表明调用方的写入意图，并引入独立的 `FOLL_COW` 标志记录此前的 COW 处理结果。重试时，内核结合当前页表项的脏位检验该结果是否仍然有效。这样，即使虚拟地址相同，先前完成的 COW 也不能单独作为向当前物理页写入的依据。[Linux 4.8.3 修复说明](https://cdn.kernel.org/pub/linux/kernel/v4.x/ChangeLog-4.8.3)
+Linux 4.8.3 所含修复保留 `FOLL_WRITE` 以表明调用方的写入意图，并引入独立的 `FOLL_COW` 标志记录此前的 COW 处理结果。重试时，内核结合当前页表项的脏位检验该结果是否仍然有效。这样，即使虚拟地址相同，先前完成的 COW 也不能单独作为向当前物理页写入的依据。
 
 ### uCore 实验内核的权限检查
 
@@ -75,7 +49,7 @@ Linux 4.8.3 所含修复保留 `FOLL_WRITE` 以表明调用方的写入意图，
 
 ### 错误版本的状态模型与抽象依据
 
-Python 模型以 `previous` 和 `current` 表示同一虚拟地址在两次检查时的映射状态。每个状态包含 VMA 写权限和叶页表项类型。判定函数 `may_resolve_cow()` 仅在 VMA 允许写入且叶条目标记为 COW 时返回真。错误版本 `stale` 将 `previous` 传入该函数，修正版本 `fixed` 则传入 `current`。[权限模型源码](../code/cow_lab/permission_model.py)
+Python 模型以 `previous` 和 `current` 表示同一虚拟地址在两次检查时的映射状态。每个状态包含 VMA 写权限和叶页表项类型。判定函数 `may_resolve_cow()` 仅在 VMA 允许写入且叶条目标记为 COW 时返回真。错误版本 `stale` 将 `previous` 传入该函数，修正版本 `fixed` 则传入 `current`。
 
 模型检验的是历史权限判定在映射变化后是否仍然适用。对于这一问题，直接给定变化前后的状态，即可确定两种实现的返回值，具体的线程调度时序不影响比较结果。例如，先前允许解除 COW 的地址若已映射为普通只读页，依据历史状态仍会得到许可，依据当前页表项则应拒绝。映射撤销与只读页替换分别构成独立输入。模型的输出仅表示是否允许解除 COW，实际的页面复制与写入隔离由后文的内核测试检验。
 
@@ -130,8 +104,11 @@ python3 -B code/cow_lab/test_permissions.py fixed
 
 上述断言覆盖单 hart 实验环境下的可观察行为。内核回写用例中，读回 31 能够验证独占映射的可写性。该用例没有记录物理页号，原页复用的实现依据是 `cow_handle_store_fault()` 中 `page_ref(page) == 1` 时直接重新映射原页的分支。
 
-运行脚本要求 QEMU 正常退出，串口日志包含四组用例的通过标记、`cowtest pass.` 和 `init check memory pass.`，并检查日志中是否出现内核 panic。默认内核的 `exit` 用例和 `make grade` 用于原有逐页复制路径的回归验证，`exit` 用例以 `exit pass.` 和 `init check memory pass.` 为通过标记。[QEMU 测试脚本](../code/cow_lab/run_cow.py)
+运行脚本要求 QEMU 正常退出，串口日志包含四组用例的通过标记、`cowtest pass.` 和 `init check memory pass.`，并检查日志中是否出现内核 panic。默认内核的 `exit` 用例和 `make grade` 用于原有逐页复制路径的回归验证，`exit` 用例以 `exit pass.` 和 `init check memory pass.` 为通过标记。
+### 测试结果
+![alt text](image-3.png)
+#### 错误版本
+![](image-4.png)
+#### 正确版本
+![alt text](image-5.png)
 
-本机默认内核的 `exit` 用例正常完成，反汇编确认 `dup_mmap()` 调用原来的 `copy_range()`。直接复制版本的 `make grade` 得分 **130/130**，隔离 COW 内核打印 `cowtest pass.`，两版模型的结果与上表一致。
-
-QEMU 4.1.1 需要显式选择 OpenSBI。本机验证通过命令行传入 `QEMU='qemu-system-riscv64 -bios default'`，评分时额外加入 `-icount shift=7,sleep=off` 加快模拟时钟。仓库原有的构建选项保持原样。

@@ -245,6 +245,8 @@ static inline void
 lsatp(unsigned long pgdir)
 {
   write_csr(satp, 0x8000000000000000 | (pgdir >> RISCV_PGSHIFT));
+  // All processes use ASID zero, so discard translations from the old page table.
+  asm volatile("sfence.vma" ::: "memory");
 }
 
 #endif

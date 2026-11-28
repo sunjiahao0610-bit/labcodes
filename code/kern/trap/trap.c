@@ -131,6 +131,10 @@ void interrupt_handler(struct trapframe *tf)
          */
         clock_set_next_event();
         ticks++;
+        if (current != NULL && !trap_in_kernel(tf))
+        {
+            current->need_resched = 1;
+        }
         if (ticks % TICK_NUM == 0) {
             print_ticks();
             num++;
@@ -268,13 +272,13 @@ void trap(struct trapframe *tf)
         current->tf = otf;
         if (!in_kernel)
         {
+            if (current->need_resched && !(current->flags & PF_EXITING))
+            {
+                schedule();
+            }
             if (current->flags & PF_EXITING)
             {
                 do_exit(-E_KILLED);
-            }
-            if (current->need_resched)
-            {
-                schedule();
             }
         }
     }

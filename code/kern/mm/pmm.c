@@ -326,8 +326,6 @@ void exit_range(pde_t *pgdir, uintptr_t start, uintptr_t end)
         if (pde1 & PTE_V)
         {
             pd0 = page2kva(pde2page(pde1));
-            // try to free all page tables
-            free_pd0 = 1;
             do
             {
                 pde0 = pd0[PDX0(d0start)];
@@ -349,11 +347,19 @@ void exit_range(pde_t *pgdir, uintptr_t start, uintptr_t end)
                         pd0[PDX0(d0start)] = 0;
                     }
                 }
-                else
-                    free_pd0 = 0;
                 d0start += PTSIZE;
             } while (d0start != 0 && d0start < d1start + PDSIZE && d0start < end);
-            // free level 0 page directory only when all pde0s in it are already invalid
+
+            // Other VMAs can still have page tables in this directory.
+            free_pd0 = 1;
+            for (int i = 0; i < NPDEENTRY; i++)
+            {
+                if (pd0[i] & PTE_V)
+                {
+                    free_pd0 = 0;
+                    break;
+                }
+            }
             if (free_pd0)
             {
                 free_page(pde2page(pde1));
@@ -364,66 +370,39 @@ void exit_range(pde_t *pgdir, uintptr_t start, uintptr_t end)
         d0start = d1start;
     } while (d1start != 0 && d1start < end);
 }
-/* copy_range - copy content of memory (start, end) of one process A to another
- * process B
- * @to:    the addr of process B's Page Directory
- * @from:  the addr of process A's Page Directory
- * @share: flags to indicate to dup OR share. We just use dup method, so it
- * didn't be used.
- *
- * CALL GRAPH: copy_mm-->dup_mmap-->copy_range
+/* Copy mapped user pages in [start, end) into the new address space.
+ * share is reserved: copy_mm handles CLONE_VM by sharing the address space.
+ * On failure the caller tears down any mappings already installed.
  */
 int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
                bool share)
 {
     assert(start % PGSIZE == 0 && end % PGSIZE == 0);
     assert(USER_ACCESS(start, end));
-    // copy content by page unit.
     do
     {
-        // call get_pte to find process A's pte according to the addr start
-        pte_t *ptep = get_pte(from, start, 0), *nptep;
+        pte_t *ptep = get_pte(from, start, 0);
         if (ptep == NULL)
         {
             start = ROUNDDOWN(start + PTSIZE, PTSIZE);
             continue;
         }
-        // call get_pte to find process B's pte according to the addr start. If
-        // pte is NULL, just alloc a PT
         if (*ptep & PTE_V)
         {
-            if ((nptep = get_pte(to, start, 1)) == NULL)
+            uint32_t perm = *ptep & PTE_USER;
+            struct Page *page = pte2page(*ptep);
+            struct Page *npage = alloc_page();
+            if (npage == NULL)
             {
                 return -E_NO_MEM;
             }
-            uint32_t perm = (*ptep & PTE_USER);
-            // get page from ptep
-            struct Page *page = pte2page(*ptep);
-            // alloc a page for process B
-            struct Page *npage = alloc_page();
-            assert(page != NULL);
-            assert(npage != NULL);
-            int ret = 0;
-            /* LAB5:EXERCISE2 YOUR CODE
-             * replicate content of page to npage, build the map of phy addr of
-             * nage with the linear addr start
-             *
-             * Some Useful MACROs and DEFINEs, you can use them in below
-             * implementation.
-             * MACROs or Functions:
-             *    page2kva(struct Page *page): return the kernel vritual addr of
-             * memory which page managed (SEE pmm.h)
-             *    page_insert: build the map of phy addr of an Page with the
-             * linear addr la
-             *    memcpy: typical memory copy function
-             *
-             * (1) find src_kvaddr: the kernel virtual address of page
-             * (2) find dst_kvaddr: the kernel virtual address of npage
-             * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
-             * (4) build the map of phy addr of  nage with the linear addr start
-             */
-
-            assert(ret == 0);
+            memcpy(page2kva(npage), page2kva(page), PGSIZE);
+            int ret = page_insert(to, npage, start, perm);
+            if (ret != 0)
+            {
+                free_page(npage);
+                return ret;
+            }
         }
         start += PGSIZE;
     } while (start != 0 && start < end);

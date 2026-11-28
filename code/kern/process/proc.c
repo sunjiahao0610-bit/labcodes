@@ -523,7 +523,8 @@ int do_exit(int error_code)
     struct mm_struct *mm = current->mm;
     if (mm != NULL)
     {
-        lsatp(boot_pgdir_pa);
+        current->pgdir = boot_pgdir_pa;
+        lsatp(current->pgdir);
         if (mm_count_dec(mm) == 0)
         {
             exit_mmap(mm);
@@ -532,12 +533,14 @@ int do_exit(int error_code)
         }
         current->mm = NULL;
     }
-    current->state = PROC_ZOMBIE;
-    current->exit_code = error_code;
     bool intr_flag;
     struct proc_struct *proc;
     local_intr_save(intr_flag);
     {
+        current->exit_code = error_code;
+        current->wait_state = 0;
+        current->state = PROC_ZOMBIE;
+
         proc = current->parent;
         if (proc->wait_state == WT_CHILD)
         {
@@ -841,9 +844,14 @@ repeat:
     }
     if (haskid)
     {
-        current->state = PROC_SLEEPING;
-        current->wait_state = WT_CHILD;
-        schedule();
+        local_intr_save(intr_flag);
+        if (!(current->flags & PF_EXITING))
+        {
+            current->wait_state = WT_CHILD;
+            current->state = PROC_SLEEPING;
+            schedule();
+        }
+        local_intr_restore(intr_flag);
         if (current->flags & PF_EXITING)
         {
             do_exit(-E_KILLED);
@@ -875,21 +883,29 @@ found:
 // do_kill - kill process with pid by set this process's flags with PF_EXITING
 int do_kill(int pid)
 {
-    struct proc_struct *proc;
-    if ((proc = find_proc(pid)) != NULL)
+    int ret;
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    struct proc_struct *proc = find_proc(pid);
+    if (proc == NULL || proc == idleproc || proc == initproc)
     {
-        if (!(proc->flags & PF_EXITING))
-        {
-            proc->flags |= PF_EXITING;
-            if (proc->wait_state & WT_INTERRUPTED)
-            {
-                wakeup_proc(proc);
-            }
-            return 0;
-        }
-        return -E_KILLED;
+        ret = -E_INVAL;
     }
-    return -E_INVAL;
+    else if (proc->state == PROC_ZOMBIE || (proc->flags & PF_EXITING))
+    {
+        ret = -E_KILLED;
+    }
+    else
+    {
+        proc->flags |= PF_EXITING;
+        if (proc->state == PROC_SLEEPING && (proc->wait_state & WT_INTERRUPTED))
+        {
+            wakeup_proc(proc);
+        }
+        ret = 0;
+    }
+    local_intr_restore(intr_flag);
+    return ret;
 }
 
 // kernel_execve - do SYS_exec syscall to exec a user program called by user_main kernel_thread
@@ -971,7 +987,16 @@ init_main(void *arg)
     assert(list_prev(&proc_list) == &(initproc->list_link));
 
     cprintf("init check memory pass.\n");
-    return 0;
+
+    // Keep init alive after reaping the last user process.
+    while (1)
+    {
+        bool intr_flag;
+        local_intr_save(intr_flag);
+        current->state = PROC_SLEEPING;
+        schedule();
+        local_intr_restore(intr_flag);
+    }
 }
 
 // proc_init - set up the first kernel thread idleproc "idle" by itself and
